@@ -4,7 +4,7 @@ option java_package = "ru.spbau.mit.core.proto";
 option java_outer_classname = "ConfigurationProtos";
 
 message ArchitectureRequest {
-    int32 architectureOrdinal = 1;
+    int32 architectureCode = 1;
 }
 
 message ArchitectureResponse {

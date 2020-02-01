@@ -6,6 +6,7 @@ import com.example.zoldater.server.worker.InitialServerWorker;
 import org.tinylog.Logger;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.*;
@@ -18,7 +19,7 @@ public class ServerMaster {
         ServerSocket serverSocket = null;
         Socket socket = null;
         try {
-            serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
+            serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort(), Integer.MAX_VALUE, InetAddress.getByName("localhost"));
             socket = serverSocket.accept();
             InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
             initialServerWorker.run();
