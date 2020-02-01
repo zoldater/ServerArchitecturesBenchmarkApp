@@ -31,7 +31,8 @@ public class ServerMaster {
                 throw new RuntimeException(e);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error(e);
+            throw new RuntimeException(e);
         } finally {
             Utils.closeResources(socket, null, null);
             if (serverSocket != null) {
@@ -43,5 +44,4 @@ public class ServerMaster {
             }
         }
     }
-
 }
