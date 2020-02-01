@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option java_package = "ru.spbau.mit.core.proto";
+option java_outer_classname = "SortingProtos";
+
+message SortingMessage {
+    int32 count = 1;
+    repeated int32 elements = 2;
+}

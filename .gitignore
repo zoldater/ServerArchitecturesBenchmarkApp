@@ -1,0 +1,7 @@
+# Project exclude paths
+/.gradle/
+/ClientCli/out/
+/ClientCli/out/production/classes/
+/Core/build/
+/Core/out/
+/Core/out/production/classes/
