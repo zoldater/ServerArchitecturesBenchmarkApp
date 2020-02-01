@@ -26,13 +26,7 @@ public class ClientMaster {
         try {
             socket = new Socket(initialConfiguration.getServerAddress(), PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             InitialClientWorker initialClientWorker = new InitialClientWorker(initialConfiguration.getArchitectureType(), socket);
-            Future<?> future = executorService.submit(initialClientWorker);
-            try {
-                future.get();
-            } catch (InterruptedException | ExecutionException e) {
-                Logger.error(e);
-                throw new RuntimeException(e);
-            }
+            initialClientWorker.run();
             ArchitectureResponse response = initialClientWorker.getResponse();
         } catch (IOException e) {
             Logger.error(e);

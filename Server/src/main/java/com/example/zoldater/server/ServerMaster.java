@@ -21,13 +21,7 @@ public class ServerMaster {
             serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             socket = serverSocket.accept();
             InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
-            Future<?> future = executorService.submit(initialServerWorker);
-            try {
-                future.get();
-            } catch (InterruptedException | ExecutionException e) {
-                Logger.error(e);
-                throw new RuntimeException(e);
-            }
+            initialServerWorker.run();
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
