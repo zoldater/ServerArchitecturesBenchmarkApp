@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 
 public class ClientMaster {
     private final InitialConfiguration initialConfiguration;
-    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -23,14 +23,14 @@ public class ClientMaster {
     }
 
     public void start() {
+        LOGGER.traceEntry();
         Socket socket = null;
         try {
-            LOGGER.traceEntry();
             socket = new Socket(initialConfiguration.getServerAddress(), PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             InitialClientWorker initialClientWorker = new InitialClientWorker(initialConfiguration.getArchitectureType(), socket);
             Future<?> future = executorService.submit(initialClientWorker);
             try {
-                future.get(120, TimeUnit.SECONDS);
+                future.get(60, TimeUnit.SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 LOGGER.error(e);
                 throw new RuntimeException(e);
