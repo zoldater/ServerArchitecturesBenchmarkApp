@@ -3,8 +3,7 @@ package com.example.zoldater.server;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.example.zoldater.server.worker.InitialServerWorker;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.tinylog.Logger;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,11 +11,10 @@ import java.net.Socket;
 import java.util.concurrent.*;
 
 public class ServerMaster {
-    private static final Logger LOGGER = LogManager.getLogger();
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     public void start() {
-        LOGGER.traceEntry();
+        Logger.info("ServerMaster starts!");
         ServerSocket serverSocket = null;
         Socket socket = null;
         try {
@@ -25,13 +23,13 @@ public class ServerMaster {
             InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
             Future<?> future = executorService.submit(initialServerWorker);
             try {
-                future.get(60, TimeUnit.SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                LOGGER.error(e);
+                future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                Logger.error(e);
                 throw new RuntimeException(e);
             }
         } catch (IOException e) {
-            LOGGER.error(e);
+            Logger.error(e);
             throw new RuntimeException(e);
         } finally {
             Utils.closeResources(socket, null, null);
@@ -39,7 +37,7 @@ public class ServerMaster {
                 try {
                     serverSocket.close();
                 } catch (IOException e) {
-                    LOGGER.error(e);
+                    Logger.error(e);
                 }
             }
         }

@@ -1,14 +1,12 @@
 package com.example.zoldater.core;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.tinylog.Logger;
 
 import java.io.*;
 import java.net.Socket;
 
 public class Utils {
 
-    private static final Logger LOGGER = LogManager.getLogger();
 
     public static <T extends com.google.protobuf.GeneratedMessageV3> byte[] serialize(T message) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(message.getSerializedSize() + 4);
@@ -42,7 +40,7 @@ public class Utils {
             }
         }
         if (exception.getSuppressed().length > 0) {
-            LOGGER.error(exception);
+            Logger.error(exception);
             throw exception;
         }
     }

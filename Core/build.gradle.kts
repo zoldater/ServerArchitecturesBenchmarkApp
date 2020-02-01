@@ -24,10 +24,10 @@ repositories {
 }
 
 dependencies {
+    implementation("org.tinylog", "tinylog-api", "2.0.1")
+    implementation("org.tinylog", "tinylog-impl", "2.0.1")
     apiElements("com.google.protobuf:protobuf-java:3.6.1")
     implementation("io.grpc:grpc-stub:1.15.1")
-    implementation("org.apache.logging.log4j", "log4j-api", "2.13.0")
-    implementation("org.apache.logging.log4j", "log4j-core", "2.13.0")
     implementation("io.grpc:grpc-protobuf:1.15.1")
     if (JavaVersion.current().isJava9Compatible) {
         // Workaround for @javax.annotation.Generated

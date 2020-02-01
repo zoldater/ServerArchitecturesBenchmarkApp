@@ -1,8 +1,7 @@
 package com.example.zoldater.core.receiver;
 
 import com.example.zoldater.core.Utils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.tinylog.Logger;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -12,7 +11,6 @@ import java.net.Socket;
 public abstract class AbstractMessageReceiver<T extends com.google.protobuf.GeneratedMessageV3> {
     private T receivedMessage;
 
-    private static final Logger LOGGER = LogManager.getLogger();
 
     public T getReceivedMessage() {
         return receivedMessage;
@@ -26,7 +24,7 @@ public abstract class AbstractMessageReceiver<T extends com.google.protobuf.Gene
             int serializedSize = dis.readInt();
             receivedMessage = deserialize(dis);
         } catch (IOException e) {
-            LOGGER.error("Error during receive response!", e);
+            Logger.error("Error during receive response!", e);
             throw new RuntimeException(e);
         } finally {
             Utils.closeResources(null, inputStream, null);
