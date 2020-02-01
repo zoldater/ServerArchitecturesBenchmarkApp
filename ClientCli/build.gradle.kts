@@ -8,6 +8,10 @@ version = "1.0-SNAPSHOT"
 
 application {
     mainClassName = "com.example.zoldater.ClientCliApplication"
+    applicationDefaultJvmArgs = listOf(
+            "-Dlog4j.rootLogger=info,stdout",
+            "-Dlog4j.appender.stdout=org.apache.log4j.ConsoleAppender"
+    )
 }
 
 repositories {
