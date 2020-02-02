@@ -4,7 +4,6 @@ import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.AverageTime;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.SortingProtos;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.IOException;
@@ -49,7 +48,7 @@ public class NonBlockingServer extends AbstractServer {
             serverSocketChannel = ServerSocketChannel.open();
 
             serverSocketChannel.configureBlocking(false);
-            serverSocketChannel.bind(new InetSocketAddress(PortConstantEnum.SERVER_PROCESSING_PORT.getPort()), Integer.MAX_VALUE);
+            serverSocketChannel.bind(new InetSocketAddress(PortConstantEnum.SERVER_NONBLOCKING_PORT.getPort()));
             serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 
             for (int i = 0; i < requestsPerClient; i++) {

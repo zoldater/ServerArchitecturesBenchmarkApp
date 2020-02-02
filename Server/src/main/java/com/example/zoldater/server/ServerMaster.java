@@ -38,97 +38,103 @@ public class ServerMaster {
             int architectureCode = request.getArchitectureCode();
             int iterationsNumber = request.getIterationsNumber();
             Socket finalSocket = socket;
-            IntStream.rangeClosed(0, iterationsNumber)
-                    .forEach(it -> {
-                        IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
-                        Future<?> future1 = configurationService.submit(iterationOpenServerWorker);
+            for (int it = 0; it < iterationsNumber && !socket.isClosed(); it++) {
+                Logger.info("Iteration #" + it + " begins!");
+                IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
+                Future<?> future1 = configurationService.submit(iterationOpenServerWorker);
+                try {
+                    future1.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    Logger.error(e);
+                    throw new RuntimeException(e);
+                }
+                IterationOpenRequest openRequest = iterationOpenServerWorker.getRequest();
+                List<AbstractServer> serverList = new ArrayList<>();
+
+                if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
+                    serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
+                            .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
+                            .collect(Collectors.toList()));
+                    serverList.forEach(dataProcessService::submit);
+                    List<? extends Future<?>> futureList = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
+                    futureList.forEach(ft -> {
                         try {
-                            future1.get();
+                            ft.get();
                         } catch (InterruptedException | ExecutionException e) {
                             Logger.error(e);
                             throw new RuntimeException(e);
                         }
-                        IterationOpenRequest openRequest = iterationOpenServerWorker.getRequest();
-                        List<AbstractServer> serverList = new ArrayList<>();
-
-                        if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
-                            serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
-                                    .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
-                                    .collect(Collectors.toList()));
-                            serverList.forEach(dataProcessService::submit);
-                            try {
-                                dataProcessService.awaitTermination(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
-                            } catch (InterruptedException e) {
-                                Logger.error(e);
-                                throw new RuntimeException(e);
+                    });
+                    dataProcessService.shutdownNow();
+                } else {
+                    ServerSocket processingServerSocket = null;
+                    try {
+                        processingServerSocket = new ServerSocket(PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
+                        for (int i = 0; i < openRequest.getClientsNumber(); i++) {
+                            Socket processingSocket = processingServerSocket.accept();
+                            serverList.add(architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code
+                                    ? new BlockingServerDirectSending(openRequest.getRequestPerClient(), processingSocket)
+                                    : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket));
+                        }
+                        if (architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code) {
+                            List<Thread> threads = serverList.stream().map(Thread::new).collect(Collectors.toList());
+                            threads.forEach(Thread::start);
+                            for (Thread thread : threads) {
+                                try {
+                                    thread.join();
+                                } catch (InterruptedException e) {
+                                    Logger.error(e);
+                                    throw new RuntimeException(e);
+                                }
                             }
-                            Logger.error("Non blocking archotecture not implemented yet!");
-                            throw new UnsupportedOperationException();
                         } else {
-                            ServerSocket processingServerSocket = null;
+                            List<? extends Future<?>> futureList = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
+                            futureList.forEach(ft -> {
+                                try {
+                                    ft.get();
+                                } catch (InterruptedException | ExecutionException e) {
+                                    Logger.error(e);
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                            dataProcessService.shutdownNow();
+                        }
+                    } catch (IOException e) {
+                        Logger.error(e);
+                        throw new RuntimeException(e);
+                    } finally {
+                        if (processingServerSocket != null) {
                             try {
-                                processingServerSocket = new ServerSocket(PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
-                                for (int i = 0; i < openRequest.getClientsNumber(); i++) {
-                                    Socket processingSocket = processingServerSocket.accept();
-                                    serverList.add(architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code
-                                            ? new BlockingServerDirectSending(openRequest.getRequestPerClient(), processingSocket)
-                                            : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket));
-                                }
-                                if (architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code) {
-                                    List<Thread> threads = serverList.stream().map(Thread::new).collect(Collectors.toList());
-                                    threads.forEach(Thread::start);
-                                    for (Thread thread : threads) {
-                                        try {
-                                            thread.join();
-                                        } catch (InterruptedException e) {
-                                            Logger.error(e);
-                                            throw new RuntimeException(e);
-                                        }
-                                    }
-                                } else {
-                                    serverList.forEach(dataProcessService::submit);
-                                    try {
-                                        dataProcessService.awaitTermination(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
-                                    } catch (InterruptedException e) {
-                                        Logger.error(e);
-                                        throw new RuntimeException(e);
-                                    }
-                                }
+                                processingServerSocket.close();
                             } catch (IOException e) {
                                 Logger.error(e);
-                                throw new RuntimeException(e);
-                            } finally {
-                                if (processingServerSocket != null) {
-                                    try {
-                                        processingServerSocket.close();
-                                    } catch (IOException e) {
-                                        Logger.error(e);
-                                    }
-                                }
-
                             }
                         }
-                        long averageClientTime = (long) serverList.stream()
-                                .mapToLong(srv -> srv.clientTime)
-                                .average().orElse(0) / openRequest.getRequestPerClient();
-                        long averageProcessingTime = (long) serverList.stream()
-                                .mapToLong(AbstractServer::getProcessingTimes)
-                                .average().orElse(0);
-                        long averageSortingTime = (long) serverList.stream()
-                                .mapToLong(AbstractServer::getSortingTimes)
-                                .average().orElse(0);
 
-                        IterationCloseServerWorker iterationCloseClientWorker =
-                                new IterationCloseServerWorker(finalSocket, averageClientTime, averageProcessingTime, averageSortingTime);
-                        future1 = configurationService.submit(iterationCloseClientWorker);
-                        try {
-                            future1.get();
-                        } catch (InterruptedException | ExecutionException e) {
-                            Logger.error(e);
-                            throw new RuntimeException(e);
-                        }
-                        IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
-                    });
+                    }
+                }
+                long averageClientTime = (long) serverList.stream()
+                        .mapToLong(srv -> srv.clientTime)
+                        .average().orElse(0) / openRequest.getRequestPerClient();
+                long averageProcessingTime = (long) serverList.stream()
+                        .mapToLong(AbstractServer::getProcessingTimes)
+                        .average().orElse(0);
+                long averageSortingTime = (long) serverList.stream()
+                        .mapToLong(AbstractServer::getSortingTimes)
+                        .average().orElse(0);
+
+                IterationCloseServerWorker iterationCloseClientWorker =
+                        new IterationCloseServerWorker(finalSocket, averageClientTime, averageProcessingTime, averageSortingTime);
+                future1 = configurationService.submit(iterationCloseClientWorker);
+                try {
+                    future1.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    Logger.error(e);
+                    throw new RuntimeException(e);
+                }
+                IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
+                Logger.info("Iteration #" + it + " ends!");
+            }
         } catch (IOException | InterruptedException | ExecutionException e) {
             Logger.error(e);
             throw new RuntimeException(e);

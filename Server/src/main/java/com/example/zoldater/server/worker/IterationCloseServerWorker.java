@@ -14,9 +14,6 @@ public class IterationCloseServerWorker implements Runnable {
     private IterationCloseRequest request;
     private final IterationCloseResponse response;
 
-    private static final String RECEIVING_LOG_TEMPLATE = "Request with question {0} successfully received!";
-    private static final String SENDING_LOG_TEMPLATE = "Response successfully sent: m1 = {0}, m2 = {1}, m3 = {2}";
-
     public IterationCloseServerWorker(Socket socket, long averageClientTime, long averageProcessingTime, long averageSortingTime) {
         this.socket = socket;
         this.response = IterationCloseResponse.newBuilder()

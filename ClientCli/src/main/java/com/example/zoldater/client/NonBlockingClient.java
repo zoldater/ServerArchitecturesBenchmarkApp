@@ -2,16 +2,23 @@ package com.example.zoldater.client;
 
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
+import com.example.zoldater.core.enums.PortConstantEnum;
 import com.google.common.collect.Ordering;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.*;
+import java.net.Socket;
 import java.util.List;
 
 public class NonBlockingClient extends AbstractClient {
     public NonBlockingClient(SingleIterationConfiguration configuration) {
         super(configuration);
+    }
+
+    @Override
+    protected Socket initSocket() throws IOException {
+        return new Socket(configuration.getServerAddress(), PortConstantEnum.SERVER_NONBLOCKING_PORT.getPort());
     }
 
     @Override

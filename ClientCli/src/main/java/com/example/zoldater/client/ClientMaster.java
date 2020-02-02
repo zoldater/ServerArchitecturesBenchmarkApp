@@ -78,23 +78,16 @@ public class ClientMaster {
                                 ? new NonBlockingClient(config)
                                 : new BlockingClient(config))
                         .collect(Collectors.toList());
-                List<? extends Future<?>> futures = clients.stream()
-                        .map(sortingConnectionService::submit)
-                        .collect(Collectors.toList());
-                futures.forEach(it -> {
+                List<Thread> threads = clients.stream().map(Thread::new).collect(Collectors.toList());
+                threads.forEach(Thread::start);
+                threads.forEach(it -> {
                     try {
-                        it.get();
-                    } catch (InterruptedException | ExecutionException e) {
+                        it.join();
+                    } catch (InterruptedException e) {
                         Logger.error(e);
                         throw new RuntimeException(e);
                     }
                 });
-                try {
-                    sortingConnectionService.awaitTermination(5, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Logger.error(e);
-                    throw new RuntimeException(e);
-                }
 
                 IterationCloseClientWorker iterationCloseClientWorker = new IterationCloseClientWorker(finalSocket);
                 future = configurationConnectionService.submit(iterationCloseClientWorker);

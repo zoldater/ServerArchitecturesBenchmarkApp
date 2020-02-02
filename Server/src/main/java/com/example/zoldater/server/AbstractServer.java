@@ -30,7 +30,6 @@ public abstract class AbstractServer implements Runnable {
     }
 
     protected static SortingMessage handleSortingMessage(@Nullable SortingMessage message) {
-        Logger.info("Start to handle SortingMessage!");
         if (message != null) {
             int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
             bubbleSort(arr);

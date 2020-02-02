@@ -25,7 +25,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
             long firstMetricsStart = System.currentTimeMillis();
-            for (int i = 0; i < requestsPerClient; i++) {
+            for (int i = 0; i <= requestsPerClient; i++) {
                 while (inputStream.available() == 0) {
                     Thread.yield();
                 }
@@ -36,18 +36,14 @@ public abstract class AbstractBlockingServer extends AbstractServer {
                 sortingTimes[i] = System.currentTimeMillis() - thirdMetricsStart;
                 sendMessage(sortedMessage, outputStream);
                 processingTimes[i] = System.currentTimeMillis() - secondMetricsStart;
-                Logger.info("Finish handling request #" + i);
             }
             clientTime = System.currentTimeMillis() - firstMetricsStart;
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            Utils.closeResources(null, inputStream, outputStream);
-            close();
+            Utils.closeResources(socket, inputStream, outputStream);
         }
     }
 
     public abstract void sendMessage(SortingMessage sortedMessage, OutputStream outputStream) throws IOException;
-
-    public abstract void close();
 }

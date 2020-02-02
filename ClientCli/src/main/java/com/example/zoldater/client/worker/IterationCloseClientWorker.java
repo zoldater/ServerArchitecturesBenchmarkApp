@@ -15,9 +15,6 @@ public class IterationCloseClientWorker implements Runnable {
     private final IterationCloseRequest request;
     private IterationCloseResponse response;
 
-    private static final String SENDING_LOG_TEMPLATE = "Request with question = {0} successfully sent!";
-    private static final String RECEIVING_LOG_TEMPLATE = "Response successfully received: m1 = {0}, m2 = {1}, m3 = {2}";
-
     public IterationCloseClientWorker(Socket socket) {
         this.socket = socket;
         this.request = IterationCloseRequest.newBuilder()
@@ -34,11 +31,7 @@ public class IterationCloseClientWorker implements Runnable {
             is = socket.getInputStream();
             os = socket.getOutputStream();
             request.writeDelimitedTo(os);
-            Logger.debug(MessageFormat.format(SENDING_LOG_TEMPLATE, request.getQuestion()));
             this.response = IterationCloseResponse.parseDelimitedFrom(is);
-            Logger.debug(MessageFormat.format(RECEIVING_LOG_TEMPLATE, response.getAveragePerClientTime(),
-                    response.getAverageProcessingTime(),
-                    response.getAverageSortingTime()));
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);

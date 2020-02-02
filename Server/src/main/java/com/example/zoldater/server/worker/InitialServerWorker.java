@@ -16,9 +16,6 @@ public class InitialServerWorker implements Runnable {
     private ArchitectureRequest request;
     private final ArchitectureResponse response;
 
-    private static final String RECEIVING_LOG_TEMPLATE = "Request with architecture code {0} successfully received!";
-    private static final String SENDING_LOG_TEMPLATE = "Response successfully sent! Processing port - {0}";
-
     public InitialServerWorker(Socket socket) {
         this.socket = socket;
         this.response = ArchitectureResponse.newBuilder()
@@ -37,9 +34,7 @@ public class InitialServerWorker implements Runnable {
             while (!socket.isClosed()) {
                 if (is.available() != 0) {
                     request = ArchitectureRequest.parseDelimitedFrom(is);
-                    Logger.info(MessageFormat.format(RECEIVING_LOG_TEMPLATE, request.getArchitectureCode()));
                     response.writeDelimitedTo(os);
-                    Logger.info(MessageFormat.format(SENDING_LOG_TEMPLATE, response.getConnectionPort()));
                     break;
                 } else {
                     Thread.yield();

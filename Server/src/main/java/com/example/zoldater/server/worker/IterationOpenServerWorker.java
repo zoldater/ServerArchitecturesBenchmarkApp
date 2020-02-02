@@ -15,9 +15,6 @@ public class IterationOpenServerWorker implements Runnable {
     private IterationOpenRequest request;
     private final IterationOpenResponse response;
 
-    private static final String RECEIVING_LOG_TEMPLATE = "Request with M = {0}, X = {1} successfully received!";
-    private static final String SENDING_LOG_TEMPLATE = "Response successfully sent! Answer is {0}";
-
     public IterationOpenServerWorker(Socket socket) {
         this.socket = socket;
         this.response = IterationOpenResponse.newBuilder()
@@ -35,9 +32,7 @@ public class IterationOpenServerWorker implements Runnable {
             while (!socket.isClosed()) {
                 if (is.available() != 0) {
                     request = IterationOpenRequest.parseDelimitedFrom(is);
-                    Logger.info(MessageFormat.format(RECEIVING_LOG_TEMPLATE, request.getClientsNumber(), request.getRequestPerClient()));
                     response.writeDelimitedTo(os);
-                    Logger.info(MessageFormat.format(SENDING_LOG_TEMPLATE, response.getAnswer()));
                     break;
                 } else {
                     Thread.yield();

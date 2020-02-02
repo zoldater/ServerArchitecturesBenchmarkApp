@@ -14,7 +14,8 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 public abstract class AbstractClient implements Runnable {
-    private final SingleIterationConfiguration configuration;
+    private Socket socket;
+    protected final SingleIterationConfiguration configuration;
 
     public AbstractClient(SingleIterationConfiguration configuration) {
         this.configuration = configuration;
@@ -22,11 +23,10 @@ public abstract class AbstractClient implements Runnable {
 
     @Override
     public void run() {
-        Socket socket;
         InputStream is = null;
         OutputStream os = null;
         try {
-            socket = new Socket(configuration.getServerAddress(), PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
+            socket = initSocket();
             is = socket.getInputStream();
             os = socket.getOutputStream();
             startScheduling(is, os);
@@ -35,6 +35,8 @@ public abstract class AbstractClient implements Runnable {
             throw new RuntimeException(e);
         }
     }
+
+    protected abstract Socket initSocket() throws IOException;
 
     private void startScheduling(@NotNull InputStream is,
                                  @NotNull OutputStream os) throws IOException {

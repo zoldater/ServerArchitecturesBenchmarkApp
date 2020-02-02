@@ -15,8 +15,4 @@ public class BlockingServerDirectSending extends AbstractBlockingServer {
     public void sendMessage(SortingProtos.SortingMessage sortedMessage, OutputStream outputStream) throws IOException {
         sortedMessage.writeDelimitedTo(outputStream);
     }
-
-    @Override
-    public void close() {
-    }
 }
