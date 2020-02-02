@@ -17,7 +17,7 @@ public class BlockingServerPoolSending extends AbstractBlockingServer {
     }
 
     @Override
-    public void sendMessage(SortingProtos.SortingMessage sortedMessage, OutputStream outputStream) throws IOException {
+    public void sendMessage(SortingProtos.SortingMessage sortedMessage, OutputStream outputStream) {
         sendingService.submit(() -> {
             try {
                 sortedMessage.writeDelimitedTo(outputStream);

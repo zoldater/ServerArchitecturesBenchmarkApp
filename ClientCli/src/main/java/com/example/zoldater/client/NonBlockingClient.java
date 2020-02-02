@@ -2,9 +2,12 @@ package com.example.zoldater.client;
 
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
+import com.google.common.collect.Ordering;
+import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.*;
+import java.util.List;
 
 public class NonBlockingClient extends AbstractClient {
     public NonBlockingClient(SingleIterationConfiguration configuration) {
@@ -25,5 +28,12 @@ public class NonBlockingClient extends AbstractClient {
         DataInputStream dis = new DataInputStream(byteArrayInputStream);
         int serializedSize = dis.readInt();
         SortingMessage receivedMessage = SortingMessage.parseFrom(dis);
+        List<Integer> list = receivedMessage.getElementsList();
+        boolean ordered = Ordering.natural().isOrdered(list);
+        if (!ordered) {
+            Logger.error("Response message not sorted!");
+            throw new RuntimeException();
+        }
+
     }
 }

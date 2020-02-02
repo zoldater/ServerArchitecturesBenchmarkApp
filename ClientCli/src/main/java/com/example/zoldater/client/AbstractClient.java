@@ -1,11 +1,9 @@
 package com.example.zoldater.client;
 
-import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import org.jetbrains.annotations.NotNull;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.SortingProtos;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.IOException;

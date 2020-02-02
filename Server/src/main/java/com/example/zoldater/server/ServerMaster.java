@@ -53,6 +53,16 @@ public class ServerMaster {
                         List<AbstractServer> serverList = new ArrayList<>();
 
                         if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
+                            serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
+                                    .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient(), dataTransferService))
+                                    .collect(Collectors.toList()));
+                            serverList.forEach(dataProcessService::submit);
+                            try {
+                                dataProcessService.awaitTermination(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
+                            } catch (InterruptedException e) {
+                                Logger.error(e);
+                                throw new RuntimeException(e);
+                            }
                             Logger.error("Non blocking archotecture not implemented yet!");
                             throw new UnsupportedOperationException();
                         } else {
@@ -103,10 +113,10 @@ public class ServerMaster {
                                 .mapToLong(srv -> srv.clientTime)
                                 .average().orElse(0) / openRequest.getRequestPerClient();
                         long averageProcessingTime = (long) serverList.stream()
-                                .mapToLong(srv -> (long) Arrays.stream(srv.processingTimes).average().orElse(0))
+                                .mapToLong(AbstractServer::getProcessingTimes)
                                 .average().orElse(0);
                         long averageSortingTime = (long) serverList.stream()
-                                .mapToLong(srv -> (long) Arrays.stream(srv.sortingTimes).average().orElse(0))
+                                .mapToLong(AbstractServer::getSortingTimes)
                                 .average().orElse(0);
 
                         IterationCloseServerWorker iterationCloseClientWorker =
@@ -119,7 +129,6 @@ public class ServerMaster {
                             throw new RuntimeException(e);
                         }
                         IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
-
                     });
         } catch (IOException | InterruptedException | ExecutionException e) {
             Logger.error(e);

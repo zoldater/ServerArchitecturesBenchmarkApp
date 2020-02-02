@@ -1,6 +1,5 @@
 package com.example.zoldater.server.worker;
 
-import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;

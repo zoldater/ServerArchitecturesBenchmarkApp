@@ -21,12 +21,12 @@ public abstract class AbstractServer implements Runnable {
         sortingTimes = new long[requestsPerClient];
     }
 
-    public long[] getProcessingTimes() {
-        return processingTimes;
+    public long getProcessingTimes() {
+        return (long) Arrays.stream(processingTimes).average().orElse(0);
     }
 
-    public long[] getSortingTimes() {
-        return sortingTimes;
+    public long getSortingTimes() {
+        return (long) Arrays.stream(sortingTimes).average().orElse(0);
     }
 
     protected static SortingMessage handleSortingMessage(@Nullable SortingMessage message) {

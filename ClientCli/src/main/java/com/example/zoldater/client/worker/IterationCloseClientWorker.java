@@ -1,12 +1,6 @@
 package com.example.zoldater.client.worker;
 
-import com.example.zoldater.core.Utils;
-import com.example.zoldater.core.configuration.data.ValueArgumentData;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.IterationProtos;
-import ru.spbau.mit.core.proto.IterationProtos.IterationCloseResponse;
-import ru.spbau.mit.core.proto.IterationProtos.IterationOpenRequest;
-import ru.spbau.mit.core.proto.IterationProtos.IterationOpenResponse;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,7 +12,7 @@ import static ru.spbau.mit.core.proto.IterationProtos.*;
 
 public class IterationCloseClientWorker implements Runnable {
     private final Socket socket;
-    private IterationCloseRequest request;
+    private final IterationCloseRequest request;
     private IterationCloseResponse response;
 
     private static final String SENDING_LOG_TEMPLATE = "Request with question = {0} successfully sent!";

@@ -1,11 +1,7 @@
 package com.example.zoldater.client.worker;
 
-import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.data.ValueArgumentData;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;
-import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureResponse;
-import ru.spbau.mit.core.proto.IterationProtos;
 import ru.spbau.mit.core.proto.IterationProtos.IterationOpenRequest;
 import ru.spbau.mit.core.proto.IterationProtos.IterationOpenResponse;
 
@@ -17,7 +13,7 @@ import java.text.MessageFormat;
 
 public class IterationOpenClientWorker implements Runnable {
     private final Socket socket;
-    private IterationOpenRequest request;
+    private final IterationOpenRequest request;
     private IterationOpenResponse response;
 
     private static final String SENDING_LOG_TEMPLATE = "Request with clientsNumber = {0} and requestsPerClient = {1} successfully sent!";

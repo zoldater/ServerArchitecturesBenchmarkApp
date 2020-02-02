@@ -1,6 +1,5 @@
 package com.example.zoldater.client.worker;
 
-import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.ArchitectureTypeEnum;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;
