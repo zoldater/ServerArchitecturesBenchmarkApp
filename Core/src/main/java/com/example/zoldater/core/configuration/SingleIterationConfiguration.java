@@ -60,7 +60,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                                         requestsPerClientSession)
                         ).collect(Collectors.toList());
             case ARRAY_ELEMENTS:
-                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
+                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue() :
                         secondArgument.getValue());
                 deltaMs = new ValueArgumentData(DELTA_MS, DELTA_MS.equals(firstArgument.getArgumentTypeEnum())
@@ -82,7 +82,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                 arrayElements = new ValueArgumentData(ARRAY_ELEMENTS, ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
                         : secondArgument.getValue());
-                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
+                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
                         : secondArgument.getValue());
                 return Stream.iterate(variableArgumentData.getFrom(),
