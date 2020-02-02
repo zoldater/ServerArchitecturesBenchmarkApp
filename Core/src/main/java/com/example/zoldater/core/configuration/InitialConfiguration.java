@@ -31,11 +31,11 @@ public class InitialConfiguration extends AbstractConfiguration {
     public static InitialConfiguration generateInitialConfig() {
         return new InitialConfigurationBuilder()
                 .setArchitectureType(ONLY_THREADS_ARCH)
-                .setServerAddress("localhost")
-                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 100, 1200, 500))
-                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 5))
-                .setValueArgumentData1(new ValueArgumentData(CLIENTS_NUMBER, 5))
-                .setValueArgumentData2(new ValueArgumentData(DELTA_MS, 10))
+                .setServerAddress("192.168.1.64")
+                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 1000, 10001, 1000))
+                .setValueArgumentData1(new ValueArgumentData(CLIENTS_NUMBER, 50))
+                .setValueArgumentData2(new ValueArgumentData(DELTA_MS, 25))
+                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 100))
                 .createInitialConfiguration();
     }
 

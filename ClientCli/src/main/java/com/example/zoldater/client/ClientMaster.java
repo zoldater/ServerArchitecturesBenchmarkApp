@@ -8,7 +8,6 @@ import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.InitialConfiguration;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.configuration.data.VariableArgumentData;
-import com.example.zoldater.core.enums.ArchitectureTypeEnum;
 import com.example.zoldater.core.enums.ArgumentTypeEnum;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.opencsv.CSVWriter;
@@ -42,6 +41,64 @@ public class ClientMaster {
 
     public ClientMaster(InitialConfiguration initialConfiguration) {
         this.initialConfiguration = initialConfiguration;
+    }
+
+    private static void saveResultsToCsvAndImage(List<BenchmarkBox> benchmarkBoxList, InitialConfiguration configuration) throws IOException {
+        String fileName = configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral() +
+                "_" +
+                configuration.getArchitectureType().toString() +
+                "_" +
+                configuration.getValueArgumentData1().getArgumentTypeEnum().getLiteral() +
+                "=" +
+                configuration.getValueArgumentData1().getValue() +
+                "_" +
+                configuration.getValueArgumentData2().getArgumentTypeEnum().getLiteral() +
+                "=" +
+                configuration.getValueArgumentData2().getValue() +
+                "_" +
+                configuration.getRequestsPerClientSession().getArgumentTypeEnum().getLiteral() +
+                "=" +
+                configuration.getRequestsPerClientSession().getValue();
+
+        File csvResultFile = new File(System.getProperty("user.dir") + "/" + fileName + ".csv");
+        CSVWriter writer = new CSVWriter(new FileWriter(csvResultFile));
+        writer.writeNext(new String[]{configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral(), "M1", "M2", "M3"});
+        benchmarkBoxList.forEach(box -> writer.writeNext(
+                new String[]{
+                        Integer.toString(box.getCurrentValue()),
+                        Double.toString(box.getAverageSortingTime()),
+                        Double.toString(box.getAverageProcessingTime()),
+                        Double.toString(box.getAverageTimePerClientSession())
+                }));
+        writer.flush();
+        Logger.debug(MessageFormat.format("Results wrote into file {0}", csvResultFile.getAbsolutePath()));
+
+        String variableArgTypeLiteral = configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral();
+
+        double[] xData = benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getCurrentValue).toArray();
+        double[][] yData = new double[][]{
+                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageSortingTime).toArray(),
+                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageProcessingTime).toArray(),
+                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageTimePerClientSession).toArray()
+        };
+
+        XYChart chart = QuickChart.getChart(fileName, "Time, ms", variableArgTypeLiteral,
+                new String[]{
+                        "Average Sorting Time",
+                        "Average Processing Time",
+                        "Average Time Per Client"
+                }, xData, yData);
+
+        File imageResultFile = new File(fileName + ".png");
+        try (FileOutputStream fileOutputStream = new FileOutputStream(imageResultFile)) {
+            BitmapEncoder.saveBitmap(chart, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
+        }
+        Logger.info(MessageFormat.format("Results wrote into file {0}", imageResultFile.getAbsolutePath()));
+
+    }
+
+    public InitialConfiguration getInitialConfiguration() {
+        return initialConfiguration;
     }
 
     public void start() {
@@ -128,61 +185,7 @@ public class ClientMaster {
             configurationConnectionService.shutdownNow();
             sortingConnectionService.shutdownNow();
             Utils.closeResources(socket, null, null);
-                    }
-
-    }
-
-    public InitialConfiguration getInitialConfiguration() {
-        return initialConfiguration;
-    }
-
-    private static void saveResultsToCsvAndImage(List<BenchmarkBox> benchmarkBoxList, InitialConfiguration configuration) throws IOException {
-        String fileName = configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral() +
-                "_" +
-                configuration.getArchitectureType().toString() +
-                "_" +
-                configuration.getValueArgumentData1().getArgumentTypeEnum().getLiteral() +
-                "=" +
-                configuration.getValueArgumentData1().getValue() +
-                "_" +
-                configuration.getValueArgumentData2().getArgumentTypeEnum().getLiteral() +
-                "=" +
-                configuration.getValueArgumentData2().getValue();
-
-        File csvResultFile = new File(System.getProperty("user.dir") + "/" + fileName + ".csv");
-        CSVWriter writer = new CSVWriter(new FileWriter(csvResultFile));
-        writer.writeNext(new String[]{configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral(), "M1", "M2", "M3"});
-        benchmarkBoxList.forEach(box -> writer.writeNext(
-                new String[]{
-                        Integer.toString(box.getCurrentValue()),
-                        Double.toString(box.getAverageSortingTime()),
-                        Double.toString(box.getAverageProcessingTime()),
-                        Double.toString(box.getAverageTimePerClientSession())
-                }));
-        writer.flush();
-        Logger.debug(MessageFormat.format("Results wrote into file {0}", csvResultFile.getAbsolutePath()));
-
-        String variableArgTypeLiteral = configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral();
-
-        double[] xData = benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getCurrentValue).toArray();
-        double[][] yData = new double[][]{
-                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageSortingTime).toArray(),
-                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageProcessingTime).toArray(),
-                benchmarkBoxList.stream().mapToDouble(BenchmarkBox::getAverageTimePerClientSession).toArray()
-        };
-
-        XYChart chart = QuickChart.getChart(fileName, "Time, ms", variableArgTypeLiteral,
-                new String[]{
-                        "Average Sorting Time",
-                        "Average Processing Time",
-                        "Average Time Per Client"
-                }, xData, yData);
-
-        File imageResultFile = new File(fileName + ".png");
-        try (FileOutputStream fileOutputStream = new FileOutputStream(imageResultFile)) {
-            BitmapEncoder.saveBitmap(chart, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
         }
-        Logger.info(MessageFormat.format("Results wrote into file {0}", imageResultFile.getAbsolutePath()));
 
     }
 
