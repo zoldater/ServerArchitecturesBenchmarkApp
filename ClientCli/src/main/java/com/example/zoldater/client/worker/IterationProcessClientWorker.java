@@ -1,6 +1,5 @@
 package com.example.zoldater.client.worker;
 
-import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.ArchitectureTypeEnum;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;
@@ -10,7 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.text.MessageFormat;
 
 public class IterationProcessClientWorker implements Runnable {
     private final Socket socket;
@@ -36,8 +34,6 @@ public class IterationProcessClientWorker implements Runnable {
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
-        } finally {
-            Utils.closeResources(null, is, os);
         }
     }
 
