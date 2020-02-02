@@ -12,7 +12,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.text.MessageFormat;
 
-public class InitialClientWorker implements Runnable {
+public class IterationProcessClientWorker implements Runnable {
     private final Socket socket;
     private final ArchitectureRequest request;
     private ArchitectureResponse response;
@@ -20,19 +20,17 @@ public class InitialClientWorker implements Runnable {
     private static final String SENDING_LOG_TEMPLATE = "Request with architecture code {0} successfully sent!";
     private static final String RECEIVING_LOG_TEMPLATE = "Response successfully received! Port for connection - {0}";
 
-    public InitialClientWorker(ArchitectureTypeEnum architectureType, int iterationsNumber, Socket socket) {
+    public IterationProcessClientWorker(ArchitectureTypeEnum architectureType, Socket socket) {
         this.socket = socket;
         this.request = ArchitectureRequest.newBuilder()
                 .setArchitectureCode(architectureType.getCode())
-                .setIterationsNumber(iterationsNumber)
                 .build();
     }
 
     @Override
     public void run() {
-        Logger.info("InitialClientWorker starts!");
-        InputStream is;
-        OutputStream os;
+        InputStream is = null;
+        OutputStream os = null;
         try {
             is = socket.getInputStream();
             os = socket.getOutputStream();
@@ -40,10 +38,11 @@ public class InitialClientWorker implements Runnable {
             Logger.debug(MessageFormat.format(SENDING_LOG_TEMPLATE, request.getArchitectureCode()));
             this.response = ArchitectureResponse.parseDelimitedFrom(is);
             Logger.debug(MessageFormat.format(RECEIVING_LOG_TEMPLATE, response.getConnectionPort()));
-            Logger.info("InitialClientWorker finishes!");
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
+        } finally {
+            Utils.closeResources(null, is, os);
         }
     }
 

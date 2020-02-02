@@ -17,6 +17,9 @@ repositories {
 dependencies {
     implementation(project(":Core"))
     testImplementation("junit", "junit", "4.12")
+    implementation("org.knowm.xchart","xchart", "3.6.1")
+    implementation("com.opencsv:opencsv:5.0")
+    implementation("com.intellij:annotations:+@jar")
     implementation("org.tinylog", "tinylog-api", "2.0.1")
     implementation("org.tinylog", "tinylog-impl", "2.0.1")
 }

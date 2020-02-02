@@ -15,7 +15,6 @@ public class Utils {
         return byteArrayOutputStream.toByteArray();
     }
 
-
     public static void closeResources(Socket socket, InputStream is, OutputStream os) {
         RuntimeException exception = new RuntimeException("Exception while closing resources!");
         if (os != null) {

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option java_package = "ru.spbau.mit.core.proto";
+option java_outer_classname = "IterationProtos";
+
+message IterationOpenRequest {
+    int32 clientsNumber = 1;
+    int32 requestPerClient = 2;
+}
+
+message IterationOpenResponse {
+    string answer = 1;
+}
+
+message IterationCloseRequest {
+    string question = 1;
+}
+
+message IterationCloseResponse {
+    int64 averageSortingTime = 1;
+    int64 averageProcessingTime = 2;
+    int64 averagePerClientTime = 3;
+}

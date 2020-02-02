@@ -32,10 +32,10 @@ public class InitialConfiguration extends AbstractConfiguration {
         return new InitialConfigurationBuilder()
                 .setArchitectureType(ONLY_THREADS_ARCH)
                 .setServerAddress("localhost")
-                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 100, 1000, 100))
-                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 10))
-                .setValueArgumentData1(new ValueArgumentData(CLIENTS_NUMBER, 10))
-                .setValueArgumentData2(new ValueArgumentData(DELTA_MS, 100))
+                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 100, 1200, 500))
+                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 5))
+                .setValueArgumentData1(new ValueArgumentData(CLIENTS_NUMBER, 5))
+                .setValueArgumentData2(new ValueArgumentData(DELTA_MS, 10))
                 .createInitialConfiguration();
     }
 

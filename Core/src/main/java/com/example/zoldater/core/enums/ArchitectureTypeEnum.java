@@ -5,7 +5,7 @@ public enum ArchitectureTypeEnum {
     WITH_EXECUTORS_ARCH(2),
     NON_BLOCKING_ARCH(3);
 
-    private final int code;
+    public final int code;
 
     ArchitectureTypeEnum(int code) {
         this.code = code;

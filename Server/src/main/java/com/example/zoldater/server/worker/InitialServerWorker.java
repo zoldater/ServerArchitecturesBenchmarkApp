@@ -30,8 +30,8 @@ public class InitialServerWorker implements Runnable {
     @Override
     public void run() {
         Logger.info("InitialServerWorker starts!");
-        InputStream is = null;
-        OutputStream os = null;
+        InputStream is;
+        OutputStream os;
         try {
             is = socket.getInputStream();
             os = socket.getOutputStream();
@@ -43,10 +43,10 @@ public class InitialServerWorker implements Runnable {
                     Logger.info(MessageFormat.format(SENDING_LOG_TEMPLATE, response.getConnectionPort()));
                     break;
                 } else {
-                    Thread.sleep(100);
+                    Thread.yield();
                 }
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
         }
