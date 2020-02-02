@@ -15,14 +15,13 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class ServerMaster {
-    private final ExecutorService dataTransferService = Executors.newSingleThreadExecutor();
+    private final ExecutorService configurationService = Executors.newSingleThreadExecutor();
     private final ExecutorService dataProcessService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
 
@@ -33,7 +32,7 @@ public class ServerMaster {
             serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             socket = serverSocket.accept();
             InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
-            Future<?> future = dataTransferService.submit(initialServerWorker);
+            Future<?> future = configurationService.submit(initialServerWorker);
             future.get();
             ConfigurationProtos.ArchitectureRequest request = initialServerWorker.getRequest();
             int architectureCode = request.getArchitectureCode();
@@ -42,7 +41,7 @@ public class ServerMaster {
             IntStream.rangeClosed(0, iterationsNumber)
                     .forEach(it -> {
                         IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
-                        Future<?> future1 = dataTransferService.submit(iterationOpenServerWorker);
+                        Future<?> future1 = configurationService.submit(iterationOpenServerWorker);
                         try {
                             future1.get();
                         } catch (InterruptedException | ExecutionException e) {
@@ -54,7 +53,7 @@ public class ServerMaster {
 
                         if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
                             serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
-                                    .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient(), dataTransferService))
+                                    .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
                                     .collect(Collectors.toList()));
                             serverList.forEach(dataProcessService::submit);
                             try {
@@ -73,7 +72,7 @@ public class ServerMaster {
                                     Socket processingSocket = processingServerSocket.accept();
                                     serverList.add(architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code
                                             ? new BlockingServerDirectSending(openRequest.getRequestPerClient(), processingSocket)
-                                            : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket, dataTransferService));
+                                            : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket));
                                 }
                                 if (architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code) {
                                     List<Thread> threads = serverList.stream().map(Thread::new).collect(Collectors.toList());
@@ -121,7 +120,7 @@ public class ServerMaster {
 
                         IterationCloseServerWorker iterationCloseClientWorker =
                                 new IterationCloseServerWorker(finalSocket, averageClientTime, averageProcessingTime, averageSortingTime);
-                        future1 = dataTransferService.submit(iterationCloseClientWorker);
+                        future1 = configurationService.submit(iterationCloseClientWorker);
                         try {
                             future1.get();
                         } catch (InterruptedException | ExecutionException e) {
@@ -134,7 +133,7 @@ public class ServerMaster {
             Logger.error(e);
             throw new RuntimeException(e);
         } finally {
-            dataTransferService.shutdownNow();
+            configurationService.shutdownNow();
             dataProcessService.shutdownNow();
             Utils.closeResources(socket, null, null);
             if (serverSocket != null) {

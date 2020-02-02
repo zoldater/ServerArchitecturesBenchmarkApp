@@ -43,9 +43,11 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             e.printStackTrace();
         } finally {
             Utils.closeResources(null, inputStream, outputStream);
+            close();
         }
     }
 
     public abstract void sendMessage(SortingMessage sortedMessage, OutputStream outputStream) throws IOException;
 
+    public abstract void close();
 }

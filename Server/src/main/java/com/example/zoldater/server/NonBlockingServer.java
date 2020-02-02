@@ -17,18 +17,18 @@ import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public class NonBlockingServer extends AbstractServer {
-    private final ExecutorService sendingService;
+    private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
     private Selector selector;
     private ServerSocketChannel serverSocketChannel;
     private final AverageTime processingTime = new AverageTime();
     private final AverageTime sortingTime = new AverageTime();
 
-    protected NonBlockingServer(int requestsPerClient, ExecutorService sendingService) {
+    protected NonBlockingServer(int requestsPerClient) {
         super(requestsPerClient);
-        this.sendingService = sendingService;
     }
 
     @Override
