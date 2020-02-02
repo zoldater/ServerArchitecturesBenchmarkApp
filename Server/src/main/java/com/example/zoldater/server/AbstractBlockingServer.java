@@ -25,7 +25,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
             long firstMetricsStart = System.currentTimeMillis();
-            for (int i = 0; i <= requestsPerClient; i++) {
+            for (int i = 0; i < requestsPerClient; i++) {
                 while (inputStream.available() == 0) {
                     Thread.yield();
                 }

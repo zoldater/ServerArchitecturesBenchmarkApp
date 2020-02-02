@@ -25,7 +25,6 @@ public class InitialServerWorker implements Runnable {
 
     @Override
     public void run() {
-        Logger.info("InitialServerWorker starts!");
         InputStream is;
         OutputStream os;
         try {

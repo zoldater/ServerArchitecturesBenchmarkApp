@@ -17,7 +17,7 @@ public class BlockingServerPoolSending extends AbstractBlockingServer {
 
     @Override
     public void sendMessage(SortingProtos.SortingMessage sortedMessage, OutputStream outputStream) {
-        Future<?> future = sendingService.submit(() -> {
+        sendingService.submit(() -> {
             try {
                 sortedMessage.writeDelimitedTo(outputStream);
             } catch (IOException e) {
@@ -25,11 +25,5 @@ public class BlockingServerPoolSending extends AbstractBlockingServer {
                 throw new RuntimeException(e);
             }
         });
-        try {
-            future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            Logger.error(e);
-            throw new RuntimeException(e);
-        }
     }
 }

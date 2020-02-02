@@ -41,14 +41,9 @@ public class ServerMaster {
             for (int it = 0; it < iterationsNumber && !socket.isClosed(); it++) {
                 Logger.info("Iteration #" + it + " begins!");
                 IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
-                Future<?> future1 = configurationService.submit(iterationOpenServerWorker);
-                try {
-                    future1.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    Logger.error(e);
-                    throw new RuntimeException(e);
-                }
+                iterationOpenServerWorker.run();
                 IterationOpenRequest openRequest = iterationOpenServerWorker.getRequest();
+                Logger.info("openRequest received!");
                 List<AbstractServer> serverList = new ArrayList<>();
 
                 if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
@@ -56,22 +51,17 @@ public class ServerMaster {
                             .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
                             .collect(Collectors.toList()));
                     serverList.forEach(dataProcessService::submit);
-                    List<? extends Future<?>> futureList = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
-                    futureList.forEach(ft -> {
-                        try {
-                            ft.get();
-                        } catch (InterruptedException | ExecutionException e) {
-                            Logger.error(e);
-                            throw new RuntimeException(e);
-                        }
-                    });
-                    dataProcessService.shutdownNow();
+                    dataProcessService.shutdown();
+                    while (!dataProcessService.isTerminated()) {
+                        Thread.sleep(10);
+                    }
                 } else {
                     ServerSocket processingServerSocket = null;
                     try {
                         processingServerSocket = new ServerSocket(PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
                         for (int i = 0; i < openRequest.getClientsNumber(); i++) {
                             Socket processingSocket = processingServerSocket.accept();
+                            Logger.info("Connected client #" + i);
                             serverList.add(architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code
                                     ? new BlockingServerDirectSending(openRequest.getRequestPerClient(), processingSocket)
                                     : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket));
@@ -87,17 +77,13 @@ public class ServerMaster {
                                     throw new RuntimeException(e);
                                 }
                             }
+                            Logger.info("Clients finished!");
                         } else {
-                            List<? extends Future<?>> futureList = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
-                            futureList.forEach(ft -> {
-                                try {
-                                    ft.get();
-                                } catch (InterruptedException | ExecutionException e) {
-                                    Logger.error(e);
-                                    throw new RuntimeException(e);
-                                }
-                            });
-                            dataProcessService.shutdownNow();
+                            serverList.forEach(dataProcessService::submit);
+                            dataProcessService.shutdown();
+                            while (!dataProcessService.isTerminated()) {
+                                Thread.sleep(10);
+                            }
                         }
                     } catch (IOException e) {
                         Logger.error(e);
@@ -125,13 +111,7 @@ public class ServerMaster {
 
                 IterationCloseServerWorker iterationCloseClientWorker =
                         new IterationCloseServerWorker(finalSocket, averageClientTime, averageProcessingTime, averageSortingTime);
-                future1 = configurationService.submit(iterationCloseClientWorker);
-                try {
-                    future1.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    Logger.error(e);
-                    throw new RuntimeException(e);
-                }
+                iterationCloseClientWorker.run();
                 IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
                 Logger.info("Iteration #" + it + " ends!");
             }

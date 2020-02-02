@@ -24,7 +24,6 @@ public class IterationCloseClientWorker implements Runnable {
 
     @Override
     public void run() {
-        Logger.info("InitialClientWorker starts!");
         InputStream is = null;
         OutputStream os = null;
         try {
