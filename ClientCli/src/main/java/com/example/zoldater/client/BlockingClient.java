@@ -26,6 +26,8 @@ public class BlockingClient extends AbstractClient {
         if (!ordered) {
             Logger.error("Response message not sorted!");
             throw new RuntimeException();
+        } else {
+            Logger.info("Response elements are sorted!");
         }
     }
 }
