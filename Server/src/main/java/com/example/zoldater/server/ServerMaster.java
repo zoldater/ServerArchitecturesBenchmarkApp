@@ -22,7 +22,7 @@ import java.util.stream.IntStream;
 
 public class ServerMaster {
     private final ExecutorService configurationService = Executors.newSingleThreadExecutor();
-    private final ExecutorService dataProcessService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final ExecutorService dataProcessService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 1);
 
 
     public void start() {
@@ -32,13 +32,12 @@ public class ServerMaster {
             serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             socket = serverSocket.accept();
             InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
-            Future<?> future = configurationService.submit(initialServerWorker);
-            future.get();
+            initialServerWorker.run();
             ConfigurationProtos.ArchitectureRequest request = initialServerWorker.getRequest();
             int architectureCode = request.getArchitectureCode();
             int iterationsNumber = request.getIterationsNumber();
             Socket finalSocket = socket;
-            for (int it = 0; it < iterationsNumber && !socket.isClosed(); it++) {
+            for (int it = 0; it <= iterationsNumber && !socket.isClosed(); it++) {
                 Logger.info("Iteration #" + it + " begins!");
                 IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
                 iterationOpenServerWorker.run();
@@ -50,11 +49,14 @@ public class ServerMaster {
                     serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
                             .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
                             .collect(Collectors.toList()));
-                    serverList.forEach(dataProcessService::submit);
-                    dataProcessService.shutdown();
-                    while (!dataProcessService.isTerminated()) {
-                        Thread.sleep(10);
-                    }
+                    List<? extends Future<?>> futures = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
+                    futures.forEach(future -> {
+                        try {
+                            future.get();
+                        } catch (InterruptedException | ExecutionException e) {
+                            e.printStackTrace();
+                        }
+                    });
                 } else {
                     ServerSocket processingServerSocket = null;
                     try {
@@ -79,11 +81,16 @@ public class ServerMaster {
                             }
                             Logger.info("Clients finished!");
                         } else {
-                            serverList.forEach(dataProcessService::submit);
-                            dataProcessService.shutdown();
-                            while (!dataProcessService.isTerminated()) {
-                                Thread.sleep(10);
-                            }
+                            List<? extends Future<?>> futures = serverList.stream()
+                                    .map(dataProcessService::submit)
+                                    .collect(Collectors.toList());
+                            futures.forEach(future -> {
+                                try {
+                                    future.get();
+                                } catch (InterruptedException | ExecutionException e) {
+                                    e.printStackTrace();
+                                }
+                            });
                         }
                     } catch (IOException e) {
                         Logger.error(e);
@@ -115,7 +122,7 @@ public class ServerMaster {
                 IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
                 Logger.info("Iteration #" + it + " ends!");
             }
-        } catch (IOException | InterruptedException | ExecutionException e) {
+        } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
         } finally {
