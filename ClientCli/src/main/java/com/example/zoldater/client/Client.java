@@ -1,47 +1,48 @@
 package com.example.zoldater.client;
 
+import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
-import org.jetbrains.annotations.NotNull;
+import com.example.zoldater.core.enums.PortConstantEnum;
+import com.google.common.collect.Ordering;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-public abstract class AbstractClient implements Runnable {
+public class Client implements Runnable {
     private Socket socket;
+    private InputStream is;
+    private OutputStream os;
+
     protected final SingleIterationConfiguration configuration;
 
-    public AbstractClient(SingleIterationConfiguration configuration) {
+    public Client(SingleIterationConfiguration configuration) {
         this.configuration = configuration;
     }
 
     @Override
     public void run() {
-        InputStream is = null;
-        OutputStream os = null;
         try {
-            socket = initSocket();
+            socket = new Socket(configuration.getServerAddress(), PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
             is = socket.getInputStream();
             os = socket.getOutputStream();
-            startScheduling(is, os);
+            startScheduling();
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
+        } finally {
+            Utils.closeResources(socket, is, os);
         }
     }
 
-    protected abstract Socket initSocket() throws IOException;
-
-    private void startScheduling(@NotNull InputStream is,
-                                 @NotNull OutputStream os) throws IOException {
+    private void startScheduling() throws IOException {
 
         for (int j = 0; j < configuration.getRequestsPerClient().getValue(); j++) {
-            process(is, os);
+            process();
             try {
                 Thread.sleep(configuration.getDeltaMs().getValue());
             } catch (InterruptedException e) {
@@ -51,7 +52,17 @@ public abstract class AbstractClient implements Runnable {
         }
     }
 
-    protected abstract void process(InputStream is, OutputStream os) throws IOException;
+    protected void process() throws IOException {
+        SortingMessage msg = generateMessage();
+        Utils.writeToStream(msg, os);
+        SortingMessage receivedMessage = Utils.readSortingMessage(is);
+        List<Integer> list = receivedMessage.getElementsList();
+        boolean ordered = Ordering.natural().isOrdered(list);
+        if (!ordered) {
+            Logger.error("Response message not sorted!");
+            throw new RuntimeException();
+        }
+    }
 
     protected SortingMessage generateMessage() {
         SortingMessage.Builder builder1 = SortingMessage.newBuilder();

@@ -49,7 +49,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                         ? firstArgument.getValue()
                         : secondArgument.getValue());
                 return Stream.iterate(variableArgumentData.getFrom(),
-                        i -> i <= variableArgumentData.getTo(),
+                        i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
                         .map(it ->
                                 new SingleIterationConfiguration(initialConfiguration.getArchitectureType(),
@@ -67,7 +67,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                         ? firstArgument.getValue()
                         : secondArgument.getValue());
                 return Stream.iterate(variableArgumentData.getFrom(),
-                        i -> i <= variableArgumentData.getTo(),
+                        i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
                         .map(it ->
                                 new SingleIterationConfiguration(initialConfiguration.getArchitectureType(),
@@ -86,7 +86,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                         ? firstArgument.getValue()
                         : secondArgument.getValue());
                 return Stream.iterate(variableArgumentData.getFrom(),
-                        i -> i <= variableArgumentData.getTo(),
+                        i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
                         .map(it ->
                                 new SingleIterationConfiguration(initialConfiguration.getArchitectureType(),

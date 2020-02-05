@@ -1,47 +1,97 @@
 package com.example.zoldater.server;
 
+import com.example.zoldater.core.BenchmarkBox;
 import com.example.zoldater.core.Utils;
 import org.tinylog.Logger;
+import ru.spbau.mit.core.proto.SortingProtos;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 
 public abstract class AbstractBlockingServer extends AbstractServer {
-    private final Socket socket;
 
-    protected AbstractBlockingServer(int requestsPerClient, Socket socket) {
-        super(requestsPerClient);
-        this.socket = socket;
+
+    protected AbstractBlockingServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
+        super(benchmarkBoxes, semaphoreSending);
     }
 
     @Override
     public void run() {
+        try {
+            serverSocket = new ServerSocket(port);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        semaphoreSending.release();
+        while (!getServerSocket().isClosed()) {
+            Socket socket;
+            try {
+                socket = getServerSocket().accept();
+                BenchmarkBox benchmarkBox = BenchmarkBox.create();
+                benchmarkBoxes.add(benchmarkBox);
+                benchmarkBox.startClientSession();
+                Thread thread = new Thread(() -> processSingleClient(socket, benchmarkBox));
+                clientThreads.add(thread);
+                thread.start();
+            } catch (IOException e) {
+//                Logger.error(e);
+                return;
+            }
+        }
+    }
+
+    public void processSingleClient(Socket socket, BenchmarkBox benchmarkBox) {
         InputStream inputStream = null;
         OutputStream outputStream = null;
         try {
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
-            long firstMetricsStart = System.currentTimeMillis();
-            for (int i = 0; i < requestsPerClient; i++) {
-                while (inputStream.available() == 0) {
-                    Thread.sleep(10);
+            while (!socket.isClosed()) {
+                benchmarkBox.startProcessing();
+                SortingProtos.SortingMessage sortingMessage = Utils.readSortingMessage(inputStream);
+                if (sortingMessage == null) {
+                    break;
                 }
-                long secondMetricsStart = System.currentTimeMillis();
-                SortingMessage message = SortingMessage.parseDelimitedFrom(inputStream);
-                long thirdMetricsStart = System.currentTimeMillis();
-                SortingMessage sortedMessage = handleSortingMessage(message);
-                sortingTimes[i] = System.currentTimeMillis() - thirdMetricsStart;
-                sendMessage(sortedMessage, outputStream);
-                processingTimes[i] = System.currentTimeMillis() - secondMetricsStart;
+                benchmarkBox.startSorting();
+                SortingProtos.SortingMessage sortedMessage = sort(sortingMessage);
+                benchmarkBox.finishSorting();
+                send(sortedMessage, outputStream);
+                benchmarkBox.finishProcessing();
             }
-            clientTime = System.currentTimeMillis() - firstMetricsStart;
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            Logger.error(e);
+            throw new RuntimeException(e);
+        } finally {
+            benchmarkBox.finishClientSession();
         }
     }
 
-    public abstract void sendMessage(SortingMessage sortedMessage, OutputStream outputStream) throws IOException;
+    public abstract SortingMessage sort(SortingMessage message) throws ExecutionException, InterruptedException;
+
+    public abstract void send(SortingMessage message, OutputStream outputStream) throws IOException;
+
+    @Override
+    public void shutdown() {
+        try {
+            serverSocket.close();
+            stopWork();
+        } catch (IOException e) {
+            Logger.error(e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    protected void stopWork() {
+        for (Thread thread : clientThreads) {
+            thread.interrupt();
+        }
+    }
 }

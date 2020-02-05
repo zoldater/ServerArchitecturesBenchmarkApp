@@ -1,44 +1,40 @@
 package com.example.zoldater.server;
 
+import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.enums.PortConstantEnum;
 import org.jetbrains.annotations.Nullable;
-import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
+import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 public abstract class AbstractServer implements Runnable {
-    protected final int requestsPerClient;
-    protected long clientTime;
-    protected final long[] processingTimes;
-    protected final long[] sortingTimes;
+    protected final int port;
+    protected ServerSocket serverSocket;
+    protected final List<BenchmarkBox> benchmarkBoxes;
+    protected final Semaphore semaphoreSending;
+    protected final List<Thread> clientThreads = new ArrayList<>();
 
-
-    protected AbstractServer(int requestsPerClient) {
-        this.requestsPerClient = requestsPerClient;
-        processingTimes = new long[requestsPerClient];
-        sortingTimes = new long[requestsPerClient];
+    protected AbstractServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
+        this.semaphoreSending = semaphoreSending;
+        this.port = PortConstantEnum.SERVER_PROCESSING_PORT.getPort();
+        this.benchmarkBoxes = benchmarkBoxes;
     }
 
-    public long getProcessingTimes() {
-        return (long) Arrays.stream(processingTimes).average().orElse(0);
-    }
-
-    public long getSortingTimes() {
-        return (long) Arrays.stream(sortingTimes).average().orElse(0);
-    }
-
-    protected static SortingMessage handleSortingMessage(@Nullable SortingMessage message) {
-        if (message != null) {
-            int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
-            bubbleSort(arr);
-            SortingMessage.Builder builder = SortingMessage.newBuilder();
-            List<Integer> sortedElements = Arrays.stream(arr).boxed().collect(Collectors.toList());
-            builder.addAllElements(sortedElements);
-            return builder.build();
+    protected static SortingMessage processSortingMessage(@Nullable SortingMessage message) {
+        if (message == null) {
+            return null;
         }
-        return null;
+        int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
+        bubbleSort(arr);
+        SortingMessage.Builder builder = SortingMessage.newBuilder();
+        List<Integer> sortedElements = Arrays.stream(arr).boxed().collect(Collectors.toList());
+        builder.addAllElements(sortedElements);
+        return builder.build();
     }
 
     private static void bubbleSort(int[] arr) {
@@ -54,5 +50,10 @@ public abstract class AbstractServer implements Runnable {
         }
     }
 
+    public abstract void shutdown();
+
+    public ServerSocket getServerSocket() {
+        return serverSocket;
+    }
 
 }

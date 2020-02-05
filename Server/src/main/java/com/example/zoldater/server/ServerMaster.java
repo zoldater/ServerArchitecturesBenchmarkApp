@@ -1,134 +1,89 @@
 package com.example.zoldater.server;
 
+import com.example.zoldater.core.BenchmarkBox;
 import com.example.zoldater.core.Utils;
-import com.example.zoldater.core.enums.ArchitectureTypeEnum;
 import com.example.zoldater.core.enums.PortConstantEnum;
-import com.example.zoldater.server.worker.InitialServerWorker;
-import com.example.zoldater.server.worker.IterationCloseServerWorker;
-import com.example.zoldater.server.worker.IterationOpenServerWorker;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos;
-import ru.spbau.mit.core.proto.IterationProtos.IterationCloseRequest;
-import ru.spbau.mit.core.proto.IterationProtos.IterationOpenRequest;
+import ru.spbau.mit.core.proto.ResultsProtos;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.concurrent.Semaphore;
 
 public class ServerMaster {
-    private final ExecutorService configurationService = Executors.newSingleThreadExecutor();
-    private final ExecutorService dataProcessService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() - 1);
+    private AbstractServer server;
 
 
     public void start() {
         ServerSocket serverSocket = null;
         Socket socket = null;
+        InputStream is = null;
+        OutputStream os = null;
         try {
+            Semaphore semaphoreSending = new Semaphore(1);
+            semaphoreSending.acquire();
             serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
             socket = serverSocket.accept();
-            InitialServerWorker initialServerWorker = new InitialServerWorker(socket);
-            initialServerWorker.run();
-            ConfigurationProtos.ArchitectureRequest request = initialServerWorker.getRequest();
-            int architectureCode = request.getArchitectureCode();
-            int iterationsNumber = request.getIterationsNumber();
-            Socket finalSocket = socket;
-            for (int it = 0; it <= iterationsNumber && !socket.isClosed(); it++) {
-                Logger.info("Iteration #" + it + " begins!");
-                IterationOpenServerWorker iterationOpenServerWorker = new IterationOpenServerWorker(finalSocket);
-                iterationOpenServerWorker.run();
-                IterationOpenRequest openRequest = iterationOpenServerWorker.getRequest();
-                Logger.info("openRequest received!");
-                List<AbstractServer> serverList = new ArrayList<>();
-
-                if (architectureCode == ArchitectureTypeEnum.NON_BLOCKING_ARCH.code) {
-                    serverList.addAll(IntStream.range(0, openRequest.getClientsNumber())
-                            .mapToObj(it1 -> new NonBlockingServer(openRequest.getRequestPerClient()))
-                            .collect(Collectors.toList()));
-                    List<? extends Future<?>> futures = serverList.stream().map(dataProcessService::submit).collect(Collectors.toList());
-                    futures.forEach(future -> {
-                        try {
-                            future.get();
-                        } catch (InterruptedException | ExecutionException e) {
-                            e.printStackTrace();
-                        }
-                    });
-                } else {
-                    ServerSocket processingServerSocket = null;
-                    try {
-                        processingServerSocket = new ServerSocket(PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
-                        for (int i = 0; i < openRequest.getClientsNumber(); i++) {
-                            Socket processingSocket = processingServerSocket.accept();
-                            Logger.info("Connected client #" + i);
-                            serverList.add(architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code
-                                    ? new BlockingServerDirectSending(openRequest.getRequestPerClient(), processingSocket)
-                                    : new BlockingServerPoolSending(openRequest.getRequestPerClient(), processingSocket));
-                        }
-                        if (architectureCode == ArchitectureTypeEnum.ONLY_THREADS_ARCH.code) {
-                            List<Thread> threads = serverList.stream().map(Thread::new).collect(Collectors.toList());
-                            threads.forEach(Thread::start);
-                            for (Thread thread : threads) {
-                                try {
-                                    thread.join();
-                                } catch (InterruptedException e) {
-                                    Logger.error(e);
-                                    throw new RuntimeException(e);
-                                }
-                            }
-                            Logger.info("Clients finished!");
-                        } else {
-                            List<? extends Future<?>> futures = serverList.stream()
-                                    .map(dataProcessService::submit)
-                                    .collect(Collectors.toList());
-                            futures.forEach(future -> {
-                                try {
-                                    future.get();
-                                } catch (InterruptedException | ExecutionException e) {
-                                    e.printStackTrace();
-                                }
-                            });
-                        }
-                    } catch (IOException e) {
-                        Logger.error(e);
-                        throw new RuntimeException(e);
-                    } finally {
-                        if (processingServerSocket != null) {
-                            try {
-                                processingServerSocket.close();
-                            } catch (IOException e) {
-                                Logger.error(e);
-                            }
-                        }
-
-                    }
-                }
-                long averageClientTime = (long) serverList.stream()
-                        .mapToLong(srv -> srv.clientTime)
-                        .average().orElse(0) / openRequest.getRequestPerClient();
-                long averageProcessingTime = (long) serverList.stream()
-                        .mapToLong(AbstractServer::getProcessingTimes)
-                        .average().orElse(0);
-                long averageSortingTime = (long) serverList.stream()
-                        .mapToLong(AbstractServer::getSortingTimes)
-                        .average().orElse(0);
-
-                IterationCloseServerWorker iterationCloseClientWorker =
-                        new IterationCloseServerWorker(finalSocket, averageClientTime, averageProcessingTime, averageSortingTime);
-                iterationCloseClientWorker.run();
-                IterationCloseRequest closeRequest = iterationCloseClientWorker.getRequest();
-                Logger.info("Iteration #" + it + " ends!");
+            is = socket.getInputStream();
+            os = socket.getOutputStream();
+            ConfigurationProtos.ArchitectureRequest architectureRequest = Utils.readArchitectureRequest(is);
+            int architectureCode = 0;
+            if (architectureRequest != null) {
+                architectureCode = architectureRequest.getArchitectureCode();
             }
-        } catch (IOException e) {
+            List<BenchmarkBox> benchmarkBoxes = new ArrayList<>();
+
+            switch (architectureCode) {
+                case 1:
+                    server = new BlockingServerThread(benchmarkBoxes, semaphoreSending);
+                    break;
+                case 2:
+                    server = new BlockingServerPool(benchmarkBoxes, semaphoreSending);
+                    break;
+                case 3:
+//                    server = new NonBlockingServer(benchmarkBoxes, lock, condition);
+                    break;
+                default:
+                    throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
+            }
+
+            Thread serverThread = new Thread(server);
+            serverThread.start();
+            semaphoreSending.acquire();
+            ConfigurationProtos.ArchitectureResponse response = ConfigurationProtos.ArchitectureResponse.newBuilder()
+                    .setConnectionPort(PortConstantEnum.SERVER_PROCESSING_PORT.getPort())
+                    .build();
+            Utils.writeToStream(response, os);
+
+            ResultsProtos.Request request = Utils.readResultsRequest(is);
+            server.shutdown();
+            serverThread.interrupt();
+            serverThread.join();
+
+            int size = benchmarkBoxes.size();
+            List<Long> clientTimes = new ArrayList<>();
+            List<Long> processingTimes = new ArrayList<>();
+            List<Long> sortingTimes = new ArrayList<>();
+            benchmarkBoxes.forEach(box -> clientTimes.add(box.getSortingAvgTimes().get(0)));
+            benchmarkBoxes.forEach(box -> processingTimes.add((long) box.getSortingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
+            benchmarkBoxes.forEach(box -> sortingTimes.add((long) box.getSortingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
+            ResultsProtos.Response resultsResponse = ResultsProtos.Response.newBuilder()
+                    .addAllClientTimes(clientTimes)
+                    .addAllProcessingTimes(processingTimes)
+                    .addAllSortingTimes(sortingTimes)
+                    .build();
+            Utils.writeToStream(resultsResponse, os);
+        } catch (IOException | InterruptedException e) {
             Logger.error(e);
             throw new RuntimeException(e);
         } finally {
-            configurationService.shutdownNow();
-            dataProcessService.shutdownNow();
-            Utils.closeResources(socket, null, null);
+            Utils.closeResources(socket, is, os);
             if (serverSocket != null) {
                 try {
                     serverSocket.close();

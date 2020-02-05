@@ -5,7 +5,6 @@ option java_outer_classname = "ConfigurationProtos";
 
 message ArchitectureRequest {
     int32 architectureCode = 1;
-    int32 iterationsNumber = 2;
 }
 
 message ArchitectureResponse {
