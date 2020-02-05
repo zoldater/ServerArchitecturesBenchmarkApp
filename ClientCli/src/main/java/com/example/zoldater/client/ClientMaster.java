@@ -90,10 +90,17 @@ public class ClientMaster {
     }
 
     private void saveResultsToCsvAndImage(ResultsProtos.Response response, InitialConfiguration configuration) throws IOException {
-        String directory = System.getProperty("user.dir") + "/" +
+        String directory = System.getProperty("user.dir") + "/Statistics/" +
+                "ARCH=" +
+                configuration.getArchitectureType().code +
+                "/" +
                 configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral() +
-                "_" +
-                configuration.getArchitectureType().toString() +
+                "-" +
+                configuration.getVariableArgumentData().getFrom() +
+                "-" +
+                configuration.getVariableArgumentData().getTo() +
+                "-" +
+                configuration.getVariableArgumentData().getStep() +
                 "_" +
                 configuration.getValueArgumentData1().getArgumentTypeEnum().getLiteral() +
                 "=" +

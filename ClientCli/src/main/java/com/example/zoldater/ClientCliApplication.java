@@ -28,13 +28,13 @@ public class ClientCliApplication {
     private static InitialConfiguration generateInitialConfig() {
         return new InitialConfigurationBuilder()
 //                .setArchitectureType(ONLY_THREADS_ARCH)
-                .setArchitectureType(WITH_EXECUTORS_ARCH)
-//                .setArchitectureType(NON_BLOCKING_ARCH)
-                .setServerAddress("localhost")
-                .setVariableArgumentData(new VariableArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setFrom(10000).setTo(100000).setStep(10000).createVariableArgumentData())
-                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(50).createValueArgumentData())
-                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(10).createValueArgumentData())
-                .setRequestsPerClient(new ValueArgumentDataBuilder().setArgumentTypeEnum(REQUESTS_PER_CLIENT).setValue(20).createValueArgumentData())
+//                .setArchitectureType(WITH_EXECUTORS_ARCH)
+                .setArchitectureType(NON_BLOCKING_ARCH)
+                .setServerAddress("192.168.1.64")
+                .setVariableArgumentData(new VariableArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setFrom(10000).setTo(50000).setStep(1000).createVariableArgumentData())
+                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(100).createValueArgumentData())
+                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(20).createValueArgumentData())
+                .setRequestsPerClient(new ValueArgumentDataBuilder().setArgumentTypeEnum(REQUESTS_PER_CLIENT).setValue(10).createValueArgumentData())
                 .createInitialConfiguration();
     }
 
