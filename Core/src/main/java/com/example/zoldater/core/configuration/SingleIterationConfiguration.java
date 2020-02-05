@@ -1,6 +1,7 @@
 package com.example.zoldater.core.configuration;
 
 import com.example.zoldater.core.configuration.data.ValueArgumentData;
+import com.example.zoldater.core.configuration.data.ValueArgumentDataBuilder;
 import com.example.zoldater.core.configuration.data.VariableArgumentData;
 import com.example.zoldater.core.enums.ArchitectureTypeEnum;
 import com.example.zoldater.core.exception.InvalidConfigurationException;
@@ -42,12 +43,12 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
         ValueArgumentData deltaMs;
         switch (variableArgumentData.getArgumentTypeEnum()) {
             case CLIENTS_NUMBER:
-                arrayElements = new ValueArgumentData(ARRAY_ELEMENTS, ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
+                arrayElements = new ValueArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setValue(ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
-                        : secondArgument.getValue());
-                deltaMs = new ValueArgumentData(DELTA_MS, DELTA_MS.equals(firstArgument.getArgumentTypeEnum())
+                        : secondArgument.getValue()).createValueArgumentData();
+                deltaMs = new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(DELTA_MS.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
-                        : secondArgument.getValue());
+                        : secondArgument.getValue()).createValueArgumentData();
                 return Stream.iterate(variableArgumentData.getFrom(),
                         i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
@@ -55,36 +56,36 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                                 new SingleIterationConfiguration(initialConfiguration.getArchitectureType(),
                                         initialConfiguration.getServerAddress(),
                                         arrayElements,
-                                        new ValueArgumentData(CLIENTS_NUMBER, it),
+                                        new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(it).createValueArgumentData(),
                                         deltaMs,
                                         requestsPerClientSession)
                         ).collect(Collectors.toList());
             case ARRAY_ELEMENTS:
-                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
+                clientsNumber = new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue() :
-                        secondArgument.getValue());
-                deltaMs = new ValueArgumentData(DELTA_MS, DELTA_MS.equals(firstArgument.getArgumentTypeEnum())
+                        secondArgument.getValue()).createValueArgumentData();
+                deltaMs = new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(DELTA_MS.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
-                        : secondArgument.getValue());
+                        : secondArgument.getValue()).createValueArgumentData();
                 return Stream.iterate(variableArgumentData.getFrom(),
                         i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
                         .map(it ->
                                 new SingleIterationConfiguration(initialConfiguration.getArchitectureType(),
                                         initialConfiguration.getServerAddress(),
-                                        new ValueArgumentData(ARRAY_ELEMENTS, it),
+                                        new ValueArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setValue(it).createValueArgumentData(),
                                         clientsNumber,
                                         deltaMs,
                                         requestsPerClientSession)
                         ).collect(Collectors.toList());
 
             case DELTA_MS:
-                arrayElements = new ValueArgumentData(ARRAY_ELEMENTS, ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
+                arrayElements = new ValueArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setValue(ARRAY_ELEMENTS.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
-                        : secondArgument.getValue());
-                clientsNumber = new ValueArgumentData(CLIENTS_NUMBER, CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
+                        : secondArgument.getValue()).createValueArgumentData();
+                clientsNumber = new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(CLIENTS_NUMBER.equals(firstArgument.getArgumentTypeEnum())
                         ? firstArgument.getValue()
-                        : secondArgument.getValue());
+                        : secondArgument.getValue()).createValueArgumentData();
                 return Stream.iterate(variableArgumentData.getFrom(),
                         i -> i < variableArgumentData.getTo(),
                         i -> i + variableArgumentData.getStep())
@@ -93,7 +94,7 @@ public class SingleIterationConfiguration extends AbstractConfiguration {
                                         initialConfiguration.getServerAddress(),
                                         arrayElements,
                                         clientsNumber,
-                                        new ValueArgumentData(DELTA_MS, it),
+                                        new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(it).createValueArgumentData(),
                                         requestsPerClientSession)
                         ).collect(Collectors.toList());
             default:

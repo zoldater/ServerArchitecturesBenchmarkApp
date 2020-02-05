@@ -24,7 +24,3 @@ dependencies {
     implementation("org.tinylog", "tinylog-api", "2.0.1")
     implementation("org.tinylog", "tinylog-impl", "2.0.1")
 }
-
-configure<JavaPluginConvention> {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-}

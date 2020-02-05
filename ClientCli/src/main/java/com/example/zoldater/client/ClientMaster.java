@@ -31,6 +31,9 @@ public class ClientMaster {
     private final ExecutorService sortingConnectionService = Executors.newCachedThreadPool();
 
 
+    private final List<XYChart> charts = new ArrayList<>();
+
+
     public ClientMaster(InitialConfiguration initialConfiguration) {
         this.initialConfiguration = initialConfiguration;
     }
@@ -61,9 +64,7 @@ public class ClientMaster {
                         .mapToObj(it -> new Client(config))
                         .collect(Collectors.toList());
                 List<Thread> threads = clients.stream().map(Thread::new).collect(Collectors.toList());
-                threads.forEach(it -> {
-                    it.start();
-                });
+                threads.forEach(Thread::start);
                 threads.forEach(it -> {
                     try {
                         it.join();
@@ -73,11 +74,9 @@ public class ClientMaster {
                     }
                 });
             });
-            Logger.info("All clients finish!");
             ResultsProtos.Request resultRequest = ResultsProtos.Request.getDefaultInstance();
             Utils.writeToStream(resultRequest, outputStream);
             ResultsProtos.Response resultsResponse = Utils.readResultsResponse(inputStream);
-            //TODO (close to config server)
             saveResultsToCsvAndImage(resultsResponse, initialConfiguration);
 
         } catch (IOException e) {
@@ -90,7 +89,7 @@ public class ClientMaster {
 
     }
 
-    private static void saveResultsToCsvAndImage(ResultsProtos.Response response, InitialConfiguration configuration) throws IOException {
+    private void saveResultsToCsvAndImage(ResultsProtos.Response response, InitialConfiguration configuration) throws IOException {
         String directory = System.getProperty("user.dir") + "/" +
                 configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral() +
                 "_" +
@@ -149,6 +148,7 @@ public class ClientMaster {
 
         XYChart chart1 = QuickChart.getChart("Average Per Client Time", variableArgTypeLiteral, "Time, ms", "Average Per Client Time",
                 xData, clientTimesPerIteration);
+        charts.add(chart1);
 
         File chart1File = new File(directoryFile, "M1.png");
         try (FileOutputStream fileOutputStream = new FileOutputStream(chart1File)) {
@@ -157,6 +157,7 @@ public class ClientMaster {
 
         XYChart chart2 = QuickChart.getChart("Average Processing Time", variableArgTypeLiteral, "Time, ms", "Average Processing Time",
                 xData, processingTimesPerIteration);
+        charts.add(chart2);
 
         File chart2File = new File(directoryFile, "M2.png");
         try (FileOutputStream fileOutputStream = new FileOutputStream(chart2File)) {
@@ -165,12 +166,18 @@ public class ClientMaster {
 
         XYChart chart3 = QuickChart.getChart("Average Sorting Time", variableArgTypeLiteral, "Time, ms", "Average Per Client Time",
                 xData, sortingTimesPerIteration);
+        charts.add(chart3);
 
         File chart3File = new File(directoryFile, "M3.png");
         try (FileOutputStream fileOutputStream = new FileOutputStream(chart3File)) {
             BitmapEncoder.saveBitmap(chart3, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
         }
     }
+
+    public List<XYChart> getCharts() {
+        return charts;
+    }
+
 
     private static double[] processSingleList(List<Long> list, int[] bunchSizes) {
         double[] result = new double[bunchSizes.length];

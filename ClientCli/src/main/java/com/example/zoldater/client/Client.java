@@ -56,11 +56,10 @@ public class Client implements Runnable {
         SortingMessage msg = generateMessage();
         Utils.writeToStream(msg, os);
         SortingMessage receivedMessage = Utils.readSortingMessage(is);
-        List<Integer> list = receivedMessage.getElementsList();
+        List<Integer> list = receivedMessage != null ? receivedMessage.getElementsList() : null;
         boolean ordered = Ordering.natural().isOrdered(list);
         if (!ordered) {
             Logger.error("Response message not sorted!");
-            throw new RuntimeException();
         }
     }
 
