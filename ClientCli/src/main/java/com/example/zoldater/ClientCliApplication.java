@@ -19,14 +19,14 @@ public class ClientCliApplication {
 
     private static InitialConfiguration generateInitialConfig() {
         return new InitialConfigurationBuilder()
-                .setArchitectureType(ONLY_THREADS_ARCH)
-//                .setArchitectureType(WITH_EXECUTORS_ARCH)
+//                .setArchitectureType(ONLY_THREADS_ARCH)
+                .setArchitectureType(WITH_EXECUTORS_ARCH)
 //                .setArchitectureType(NON_BLOCKING_ARCH)
                 .setServerAddress("localhost")
-                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 1000, 2000, 100))
-                .setValueArgumentData1(new ValueArgumentData(DELTA_MS, 30))
-                .setValueArgumentData2(new ValueArgumentData(CLIENTS_NUMBER, 200))
-                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 50))
+                .setVariableArgumentData(new VariableArgumentData(ARRAY_ELEMENTS, 10000, 100000, 10000))
+                .setValueArgumentData1(new ValueArgumentData(DELTA_MS, 50))
+                .setValueArgumentData2(new ValueArgumentData(CLIENTS_NUMBER, 10))
+                .setRequestsPerClient(new ValueArgumentData(REQUESTS_PER_CLIENT, 20))
                 .createInitialConfiguration();
     }
 

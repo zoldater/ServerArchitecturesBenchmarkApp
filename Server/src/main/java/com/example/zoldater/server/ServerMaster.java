@@ -47,7 +47,7 @@ public class ServerMaster {
                     server = new BlockingServerPool(benchmarkBoxes, semaphoreSending);
                     break;
                 case 3:
-//                    server = new NonBlockingServer(benchmarkBoxes, lock, condition);
+                    server = new NonBlockingServer(benchmarkBoxes, semaphoreSending);
                     break;
                 default:
                     throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
@@ -66,12 +66,11 @@ public class ServerMaster {
             serverThread.interrupt();
             serverThread.join();
 
-            int size = benchmarkBoxes.size();
             List<Long> clientTimes = new ArrayList<>();
             List<Long> processingTimes = new ArrayList<>();
             List<Long> sortingTimes = new ArrayList<>();
-            benchmarkBoxes.forEach(box -> clientTimes.add(box.getSortingAvgTimes().get(0)));
-            benchmarkBoxes.forEach(box -> processingTimes.add((long) box.getSortingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
+            benchmarkBoxes.forEach(box -> clientTimes.add(box.getClientAvgTimes().get(0)));
+            benchmarkBoxes.forEach(box -> processingTimes.add((long) box.getProcessingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
             benchmarkBoxes.forEach(box -> sortingTimes.add((long) box.getSortingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
             ResultsProtos.Response resultsResponse = ResultsProtos.Response.newBuilder()
                     .addAllClientTimes(clientTimes)
