@@ -15,7 +15,7 @@ buildscript {
         maven("https://plugins.gradle.org/m2/")
     }
     dependencies {
-        classpath("com.google.protobuf", "protobuf-gradle-plugin", "0.8.11")
+        classpath("com.google.protobuf", "protobuf-gradle-plugin", "0.8.8")
     }
 }
 
@@ -26,9 +26,9 @@ repositories {
 dependencies {
     implementation("org.tinylog", "tinylog-api", "2.0.1")
     implementation("org.tinylog", "tinylog-impl", "2.0.1")
-    implementation("com.google.protobuf:protobuf-java:3.9.2")
-    implementation("io.grpc:grpc-stub:1.27.0")
-    implementation("io.grpc:grpc-protobuf:1.27.0")
+    apiElements("com.google.protobuf:protobuf-java:3.6.1")
+    implementation("io.grpc:grpc-stub:1.15.1")
+    implementation("io.grpc:grpc-protobuf:1.15.1")
     if (JavaVersion.current().isJava9Compatible) {
         // Workaround for @javax.annotation.Generated
         // see: https://github.com/grpc/grpc-java/issues/3633
@@ -61,14 +61,14 @@ protobuf {
     // Configure the protoc executable
     protoc {
         // The artifact spec for the Protobuf Compiler
-        artifact = "com.google.protobuf:protoc:3.9.2"
+        artifact = "com.google.protobuf:protoc:3.6.1"
     }
     plugins {
         // Optional: an artifact spec for a protoc plugin, with "grpc" as
         // the identifier, which can be referred to in the "plugins"
         // container of the "generateProtoTasks" closure.
         id("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.27.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.15.1"
         }
     }
     generateProtoTasks {
