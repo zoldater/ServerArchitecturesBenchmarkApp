@@ -42,7 +42,6 @@ public abstract class AbstractBlockingServer extends AbstractServer {
                 clientThreads.add(thread);
                 thread.start();
             } catch (IOException e) {
-//                Logger.error(e);
                 return;
             }
         }

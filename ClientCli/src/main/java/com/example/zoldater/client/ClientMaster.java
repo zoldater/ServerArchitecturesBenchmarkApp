@@ -59,6 +59,7 @@ public class ClientMaster {
             List<SingleIterationConfiguration> iterationConfigurations = SingleIterationConfiguration.fromInitialConfiguration(initialConfiguration);
 
             iterationConfigurations.forEach(config -> {
+                Logger.info("Started new config!");
                 int clientsNumber = config.getClientsNumber().getValue();
                 List<Client> clients = IntStream.range(0, clientsNumber)
                         .mapToObj(it -> new Client(config))

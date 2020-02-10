@@ -14,10 +14,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 public class ServerMaster {
     private AbstractServer server;
+
+    private final ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
 
 
     public void start() {
@@ -53,8 +57,7 @@ public class ServerMaster {
                     throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
             }
 
-            Thread serverThread = new Thread(server);
-            serverThread.start();
+            serverExecutor.submit(server);
             semaphoreSending.acquire();
             ConfigurationProtos.ArchitectureResponse response = ConfigurationProtos.ArchitectureResponse.newBuilder()
                     .setConnectionPort(PortConstantEnum.SERVER_PROCESSING_PORT.getPort())
@@ -63,8 +66,7 @@ public class ServerMaster {
 
             ResultsProtos.Request request = Utils.readResultsRequest(is);
             server.shutdown();
-            serverThread.interrupt();
-            serverThread.join();
+            serverExecutor.shutdownNow();
 
             List<Long> clientTimes = new ArrayList<>();
             List<Long> processingTimes = new ArrayList<>();

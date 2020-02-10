@@ -28,13 +28,13 @@ public class ClientCliApplication {
     private static InitialConfiguration generateInitialConfig() {
         return new InitialConfigurationBuilder()
 //                .setArchitectureType(ONLY_THREADS_ARCH)
-                .setArchitectureType(WITH_EXECUTORS_ARCH)
-//                .setArchitectureType(NON_BLOCKING_ARCH)
+//                .setArchitectureType(WITH_EXECUTORS_ARCH)
+                .setArchitectureType(NON_BLOCKING_ARCH)
                 .setServerAddress("localhost")
                 .setVariableArgumentData(new VariableArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS).setFrom(1000).setTo(2000).setStep(100).createVariableArgumentData())
-                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(50).createValueArgumentData())
-                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(10).createValueArgumentData())
-                .setRequestsPerClient(new ValueArgumentDataBuilder().setArgumentTypeEnum(REQUESTS_PER_CLIENT).setValue(100).createValueArgumentData())
+                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS).setValue(100).createValueArgumentData())
+                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER).setValue(50).createValueArgumentData())
+                .setRequestsPerClient(new ValueArgumentDataBuilder().setArgumentTypeEnum(REQUESTS_PER_CLIENT).setValue(50).createValueArgumentData())
                 .createInitialConfiguration();
     }
 
