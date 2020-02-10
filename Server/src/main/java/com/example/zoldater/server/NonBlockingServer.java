@@ -10,19 +10,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
+
+import static com.example.zoldater.core.Utils.processSortingMessage;
 
 public class NonBlockingServer extends AbstractServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
     private final ExecutorService sortingService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private Selector selector;
     private ServerSocketChannel serverSocketChannel;
+    private final Semaphore writingSemaphore = new Semaphore(1);
 
     protected NonBlockingServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
         super(benchmarkBoxes, semaphoreSending);
@@ -32,43 +33,52 @@ public class NonBlockingServer extends AbstractServer {
     @Override
     public void run() {
         try {
-            selector = Selector.open();
             serverSocketChannel = ServerSocketChannel.open();
 
+            serverSocketChannel.socket().bind(new InetSocketAddress(PortConstantEnum.SERVER_PROCESSING_PORT.getPort()));
             serverSocketChannel.configureBlocking(false);
-            serverSocketChannel.bind(new InetSocketAddress(PortConstantEnum.SERVER_PROCESSING_PORT.getPort()));
-            serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+            selector = Selector.open();
+            writingSemaphore.acquire();
             semaphoreSending.release();
+            serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 
             while (true) {
-                int keysNum = selector.select();
+                Set<SelectionKey> keys;
+                try {
+                    selector.select();
+                    keys = selector.selectedKeys();
+                } catch (ClosedSelectorException e) {
+                    return;
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
                 BenchmarkBox benchmarkBox = BenchmarkBox.create();
                 benchmarkBoxes.add(benchmarkBox);
                 benchmarkBox.startClientSession();
-                if (selector.isOpen() && keysNum > 0) {
-                    benchmarkBox.startProcessing();
-                    Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-                    while (keyIterator.hasNext()) {
-                        SelectionKey selectionKey = keyIterator.next();
-                        if (selectionKey.isAcceptable()) {
-                            benchmarkBox.startProcessing();
-                            accept(selectionKey);
-                        } else {
-                            if (selectionKey.isReadable()) {
-                                read(selectionKey, benchmarkBox);
-                            }
-
-                            if (selectionKey.isValid() && selectionKey.isWritable()) {
-                                write(selectionKey, benchmarkBox);
-                            }
+                benchmarkBox.startProcessing();
+                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+                while (keyIterator.hasNext()) {
+                    SelectionKey selectionKey = keyIterator.next();
+                    if (selectionKey.isAcceptable()) {
+                        benchmarkBox.startProcessing();
+                        accept(selectionKey);
+                    } else {
+                        if (selectionKey.isReadable()) {
+                            read(selectionKey, benchmarkBox);
                         }
-                        benchmarkBox.finishProcessing();
-                        keyIterator.remove();
+
+                        if (selectionKey.isValid() && selectionKey.isWritable()) {
+                            write(selectionKey, benchmarkBox);
+                        }
                     }
+                    benchmarkBox.finishProcessing();
+                    keyIterator.remove();
                 }
+
                 benchmarkBox.finishClientSession();
             }
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             Logger.error(e);
             throw new RuntimeException("Exception during non blocking server work", e);
         } finally {
@@ -102,28 +112,32 @@ public class NonBlockingServer extends AbstractServer {
                 selectionKey.cancel();
                 channel.close();
             }
-            if (!sizeReadingAttachment.sizeBuffer.hasRemaining()) {
-                selectionKey.attach(
-                        new MessageReadingAttachment(sizeReadingAttachment));
+            while (sizeReadingAttachment.sizeBuffer.hasRemaining()) {
             }
+            selectionKey.attach(
+                    new MessageReadingAttachment(sizeReadingAttachment));
+
         } else if (attachment instanceof MessageReadingAttachment) {
             MessageReadingAttachment messageReadingAttachment = (MessageReadingAttachment) attachment;
             channel.read(messageReadingAttachment.messageBuffer);
-            if (!messageReadingAttachment.messageBuffer.hasRemaining()) {
-                SortingMessage arrayMessage = SortingMessage.parseFrom(messageReadingAttachment.messageBuffer.array());
-
-                benchmarkBox.startSorting();
-                Future<ByteBuffer> futureResponse = sendingService.submit(() -> {
-                    SortingMessage resultMessage = processSortingMessage(arrayMessage);
-                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                    Utils.writeToStream(resultMessage, byteArrayOutputStream);
-                    return ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
-                });
-
-                channel.register(selector,
-                        SelectionKey.OP_WRITE,
-                        new ProcessingAttachment(messageReadingAttachment, futureResponse));
+            while (messageReadingAttachment.messageBuffer.hasRemaining()) {
             }
+            SortingMessage arrayMessage = SortingMessage.parseFrom(messageReadingAttachment.messageBuffer.array());
+
+            Future<ByteBuffer> futureResponse = sendingService.submit(() -> {
+                benchmarkBox.startSorting();
+                SortingMessage resultMessage = processSortingMessage(arrayMessage);
+                benchmarkBox.finishSorting();
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                Utils.writeToStream(resultMessage, byteArrayOutputStream);
+                writingSemaphore.release();
+                return ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
+            });
+
+            channel.register(selector,
+                    SelectionKey.OP_WRITE,
+                    new ProcessingAttachment(messageReadingAttachment, futureResponse));
+
         }
     }
 
@@ -136,37 +150,40 @@ public class NonBlockingServer extends AbstractServer {
 
         if (attachment instanceof ProcessingAttachment) {
             ProcessingAttachment processingAttachment = (ProcessingAttachment) attachment;
-            if (processingAttachment.futureResponse.isDone()) {
-                try {
-                    WriteAttachment writeAttachment = new WriteAttachment(processingAttachment, processingAttachment.futureResponse.get());
-                    benchmarkBox.finishSorting();
-                    channel.write(writeAttachment.messageBuffer);
-                    if (writeAttachment.messageBuffer.hasRemaining()) {
-                        selectionKey.attach(new WriteAttachment(processingAttachment, writeAttachment.messageBuffer));
-                    } else {
-                        selectionKey.attach(null);
-                        channel.register(selector,
-                                SelectionKey.OP_READ,
-                                null);
-                    }
-                } catch (InterruptedException | ExecutionException e) {
-
-                    Logger.info(e);
-                    throw new RuntimeException("Exception while processing message.", e);
-                } finally {
-                    channel.close();
-                }
+            while (!processingAttachment.futureResponse.isDone()) {
             }
+            try {
+                writingSemaphore.acquire();
+                WriteAttachment writeAttachment = new WriteAttachment(processingAttachment, processingAttachment.futureResponse.get());
+                channel.write(writeAttachment.messageBuffer);
+                if (writeAttachment.messageBuffer.hasRemaining()) {
+                    selectionKey.attach(new WriteAttachment(processingAttachment, writeAttachment.messageBuffer));
+                } else {
+                    selectionKey.attach(null);
+                    channel.register(selector,
+                            SelectionKey.OP_READ,
+                            null);
+                }
+            } catch (InterruptedException | ExecutionException e) {
+
+                Logger.info(e);
+                throw new RuntimeException("Exception while processing message.", e);
+            } finally {
+                channel.close();
+            }
+
         } else if (attachment instanceof WriteAttachment) {
             WriteAttachment writeAttachment = (WriteAttachment) attachment;
             channel.write(writeAttachment.messageBuffer);
-            if (!writeAttachment.messageBuffer.hasRemaining()) {
-
-                selectionKey.attach(null);
-                channel.register(selector,
-                        SelectionKey.OP_READ,
-                        null);
+            while (writeAttachment.messageBuffer.hasRemaining()) {
             }
+
+            selectionKey.attach(null);
+            channel.register(selector,
+                    SelectionKey.OP_READ,
+                    null);
+            benchmarkBox.finishProcessing();
+
         }
     }
 

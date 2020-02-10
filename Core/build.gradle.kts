@@ -26,6 +26,7 @@ repositories {
 dependencies {
     implementation("org.tinylog", "tinylog-api", "2.0.1")
     implementation("org.tinylog", "tinylog-impl", "2.0.1")
+    implementation("com.intellij:annotations:+@jar")
     apiElements("com.google.protobuf:protobuf-java:3.6.1")
     implementation("io.grpc:grpc-stub:1.15.1")
     implementation("io.grpc:grpc-protobuf:1.15.1")

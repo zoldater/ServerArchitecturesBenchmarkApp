@@ -24,7 +24,7 @@ public class BlockingServerThread extends AbstractBlockingServer {
 
     @Override
     public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message) throws ExecutionException, InterruptedException {
-        return processSortingMessage(message);
+        return Utils.processSortingMessage(message);
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.example.zoldater.server;
 
 import com.example.zoldater.core.BenchmarkBox;
 import com.example.zoldater.core.Utils;
+import jdk.jshell.execution.Util;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
 
@@ -23,7 +24,7 @@ public class BlockingServerPool extends AbstractBlockingServer {
 
     @Override
     public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message) throws ExecutionException, InterruptedException {
-        Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> processSortingMessage(message));
+        Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> Utils.processSortingMessage(message));
         SortingProtos.SortingMessage sortedMessage = messageFuture.get();
         return sortedMessage;
     }

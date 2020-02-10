@@ -1,5 +1,6 @@
 package com.example.zoldater.core;
 
+import org.jetbrains.annotations.Nullable;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos;
 import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;
@@ -9,6 +10,9 @@ import ru.spbau.mit.core.proto.SortingProtos;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Utils {
 
@@ -77,6 +81,32 @@ public class Utils {
         }
         return messageBytes;
     }
+
+    public static SortingProtos.SortingMessage processSortingMessage(@Nullable SortingProtos.SortingMessage message) {
+        if (message == null) {
+            return null;
+        }
+        int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
+        bubbleSort(arr);
+        SortingProtos.SortingMessage.Builder builder = SortingProtos.SortingMessage.newBuilder();
+        List<Integer> sortedElements = Arrays.stream(arr).boxed().collect(Collectors.toList());
+        builder.addAllElements(sortedElements);
+        return builder.build();
+    }
+
+    private static void bubbleSort(int[] arr) {
+        int n = arr.length;
+        for (int i = 0; i < n; i++) {
+            for (int j = 1; j < (n - i); j++) {
+                if (arr[j - 1] > arr[j]) {
+                    int tmp = arr[j - 1];
+                    arr[j - 1] = arr[j];
+                    arr[j] = tmp;
+                }
+            }
+        }
+    }
+
 
     public static void closeResources(Socket socket, InputStream is, OutputStream os) {
         RuntimeException exception = new RuntimeException("Exception while closing resources!");
