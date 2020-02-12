@@ -6,9 +6,7 @@ import com.example.zoldater.core.enums.PortConstantEnum;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
-import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -16,12 +14,13 @@ import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-
-import static com.example.zoldater.core.Utils.processSortingMessage;
 
 public class NonBlockingServer extends AbstractServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
@@ -29,8 +28,6 @@ public class NonBlockingServer extends AbstractServer {
     private Selector readSelector;
     private Selector writeSelector;
     private ServerSocketChannel serverSocketChannel;
-    private final Lock lock = new ReentrantLock();
-    private final Condition writeCondition = lock.newCondition();
 
     protected NonBlockingServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
         super(benchmarkBoxes, semaphoreSending);
@@ -51,21 +48,12 @@ public class NonBlockingServer extends AbstractServer {
                 while (true) {
                     Set<SelectionKey> keys;
                     try {
-                        lock.lock();
-                        int ready = writeSelector.selectNow();
-                        if (ready == 0) {
-                            while (writeSelector.keys().isEmpty()) {
-                                writeCondition.await();
-                            }
-                        }
                         writeSelector.select();
                         keys = writeSelector.selectedKeys();
-                    } catch (ClosedSelectorException | InterruptedException e) {
+                    } catch (ClosedSelectorException e) {
                         return;
                     } catch (IOException e) {
                         throw new RuntimeException(e);
-                    } finally {
-                        lock.unlock();
                     }
 
                     Iterator<SelectionKey> it = keys.iterator();
@@ -182,7 +170,6 @@ public class NonBlockingServer extends AbstractServer {
                 attachment.messageContent.flip();
                 sortingService.submit(() -> {
                     try {
-                        lock.lock();
                         byte[] messageBytesArray = attachment.messageContent.array();
                         SortingProtos.SortingMessage sortingMessage = SortingProtos.SortingMessage.parseFrom(messageBytesArray);
                         attachment.startSorting();
@@ -195,12 +182,9 @@ public class NonBlockingServer extends AbstractServer {
                         attachment.messageContent = ByteBuffer.wrap(sortedMessageBytes);
                         attachment.status = AttachmentStatus.READY_TO_WRITE;
                         attachment.socketChannel.register(writeSelector, SelectionKey.OP_WRITE, attachment);
-                        writeCondition.signal();
                     } catch (InvalidProtocolBufferException | ClosedChannelException e) {
                         Logger.error(e);
                         throw new RuntimeException(e);
-                    } finally {
-                        lock.unlock();
                     }
                 });
             }
@@ -266,7 +250,7 @@ public class NonBlockingServer extends AbstractServer {
         }
     }
 
-    private static enum AttachmentStatus {
+    private enum AttachmentStatus {
         READY_TO_READ(1),
         READY_TO_PROCESS(2),
         READY_TO_WRITE(3);

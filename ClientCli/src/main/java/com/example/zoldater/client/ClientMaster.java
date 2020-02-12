@@ -91,10 +91,10 @@ public class ClientMaster {
     }
 
     private void saveResultsToCsvAndImage(ResultsProtos.Response response, InitialConfiguration configuration) throws IOException {
-        String directory = System.getProperty("user.dir") + "/Statistics/" +
-                "ARCH=" +
+        String fileName = System.getProperty("user.dir") + "/Statistics/" +
+                "A=" +
                 configuration.getArchitectureType().code +
-                "/" +
+                "_" +
                 configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral() +
                 "-" +
                 configuration.getVariableArgumentData().getFrom() +
@@ -115,7 +115,7 @@ public class ClientMaster {
                 "=" +
                 configuration.getRequestsPerClientSession().getValue();
 
-        final File directoryFile = new File(directory);
+        final File directoryFile = new File(fileName);
         directoryFile.mkdirs();
         File csvResultFile = new File(directoryFile, "results.csv");
         CSVWriter writer = new CSVWriter(new FileWriter(csvResultFile));
@@ -154,38 +154,18 @@ public class ClientMaster {
         String variableArgTypeLiteral = variableArgumentData.getArgumentTypeEnum().getLiteral();
         double[] xData = Arrays.stream(values).mapToDouble(it -> it).toArray();
 
-        XYChart chart1 = QuickChart.getChart("Average Per Client Time", variableArgTypeLiteral, "Time, ms", "Average Per Client Time",
-                xData, clientTimesPerIteration);
-        charts.add(chart1);
+        double[][] yData = new double[][]{clientTimesPerIteration, processingTimesPerIteration, sortingTimesPerIteration};
 
-        File chart1File = new File(directoryFile, "M1.png");
-        try (FileOutputStream fileOutputStream = new FileOutputStream(chart1File)) {
-            BitmapEncoder.saveBitmap(chart1, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
-        }
+        XYChart chart = QuickChart.getChart("Statistics", variableArgTypeLiteral, "Time, ms",
+                new String[]{"Average Per Client Time", "Average Processing Time", "Average Sorting Time"},
+                xData, yData);
+        this.charts.add(chart);
 
-        XYChart chart2 = QuickChart.getChart("Average Processing Time", variableArgTypeLiteral, "Time, ms", "Average Processing Time",
-                xData, processingTimesPerIteration);
-        charts.add(chart2);
-
-        File chart2File = new File(directoryFile, "M2.png");
-        try (FileOutputStream fileOutputStream = new FileOutputStream(chart2File)) {
-            BitmapEncoder.saveBitmap(chart2, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
-        }
-
-        XYChart chart3 = QuickChart.getChart("Average Sorting Time", variableArgTypeLiteral, "Time, ms", "Average Per Client Time",
-                xData, sortingTimesPerIteration);
-        charts.add(chart3);
-
-        File chart3File = new File(directoryFile, "M3.png");
-        try (FileOutputStream fileOutputStream = new FileOutputStream(chart3File)) {
-            BitmapEncoder.saveBitmap(chart3, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
+        File chartFile = new File(directoryFile, "Chart.png");
+        try (FileOutputStream fileOutputStream = new FileOutputStream(chartFile)) {
+            BitmapEncoder.saveBitmap(chart, fileOutputStream, BitmapEncoder.BitmapFormat.PNG);
         }
     }
-
-    public List<XYChart> getCharts() {
-        return charts;
-    }
-
 
     private static double[] processSingleList(List<Long> list, int[] bunchSizes) {
         double[] result = new double[bunchSizes.length];
@@ -196,5 +176,9 @@ public class ClientMaster {
         }
         result[result.length - 1] = list.subList(sublistIndex, list.size()).stream().mapToLong(it -> it).average().orElse(0);
         return result;
+    }
+
+    public List<XYChart> getCharts() {
+        return charts;
     }
 }

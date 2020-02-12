@@ -17,6 +17,8 @@ import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.util.List;
 
+import static com.example.zoldater.core.enums.ArgumentTypeEnum.*;
+
 public class ClientSwingForm extends JFrame {
 
     private JPanel mainPanel;
@@ -56,8 +58,8 @@ public class ClientSwingForm extends JFrame {
         ValueArgumentDataBuilder valueRequestDelayBuilder = new ValueArgumentDataBuilder();
         ValueArgumentDataBuilder valueRequestPerClientBuilder = new ValueArgumentDataBuilder();
 
-        variableArgumentDataBuilder.setArgumentTypeEnum(ArgumentTypeEnum.ARRAY_ELEMENTS);
-        variableArgumentDataBuilder.setArgumentTypeEnum(ArgumentTypeEnum.ARRAY_ELEMENTS);
+        variableArgumentDataBuilder.setArgumentTypeEnum(ARRAY_ELEMENTS);
+        variableArgumentDataBuilder.setArgumentTypeEnum(ARRAY_ELEMENTS);
         elementsText.setEnabled(false);
 
         configurationBuilder.setArchitectureType(ArchitectureTypeEnum.ONLY_THREADS_ARCH);
@@ -92,19 +94,19 @@ public class ClientSwingForm extends JFrame {
                     elementsText.setEnabled(false);
                     clientsValueText.setEnabled(true);
                     delayText.setEnabled(true);
-                    variableArgumentDataBuilder.setArgumentTypeEnum(ArgumentTypeEnum.ARRAY_ELEMENTS);
+                    variableArgumentDataBuilder.setArgumentTypeEnum(ARRAY_ELEMENTS);
                     break;
                 case "Clients simultaneously (M)":
                     clientsValueText.setEnabled(false);
                     elementsText.setEnabled(true);
                     delayText.setEnabled(true);
-                    variableArgumentDataBuilder.setArgumentTypeEnum(ArgumentTypeEnum.CLIENTS_NUMBER);
+                    variableArgumentDataBuilder.setArgumentTypeEnum(CLIENTS_NUMBER);
                     break;
                 case "Delay between requests (D)":
                     delayText.setEnabled(false);
                     elementsText.setEnabled(true);
                     clientsValueText.setEnabled(true);
-                    variableArgumentDataBuilder.setArgumentTypeEnum(ArgumentTypeEnum.DELTA_MS);
+                    variableArgumentDataBuilder.setArgumentTypeEnum(DELTA_MS);
                     break;
                 default:
                     throw new RuntimeException("Bad configuration in UI!");
@@ -114,15 +116,15 @@ public class ClientSwingForm extends JFrame {
         varFromText.getDocument().addDocumentListener((SimpleDocumentListener) e -> variableArgumentDataBuilder.setFrom(Integer.parseInt(varFromText.getText())));
         varToArea.getDocument().addDocumentListener((SimpleDocumentListener) e -> variableArgumentDataBuilder.setTo(Integer.parseInt(varToArea.getText())));
         elementsText.getDocument().addDocumentListener((SimpleDocumentListener) e -> {
-            valueElementsCountBuilder.setArgumentTypeEnum(ArgumentTypeEnum.ARRAY_ELEMENTS);
+            valueElementsCountBuilder.setArgumentTypeEnum(ARRAY_ELEMENTS);
             valueElementsCountBuilder.setValue(Integer.parseInt(elementsText.getText()));
         });
         clientsValueText.getDocument().addDocumentListener((SimpleDocumentListener) e -> {
-            valueClientsCountBuilder.setArgumentTypeEnum(ArgumentTypeEnum.CLIENTS_NUMBER);
+            valueClientsCountBuilder.setArgumentTypeEnum(CLIENTS_NUMBER);
             valueClientsCountBuilder.setValue(Integer.parseInt(clientsValueText.getText()));
         });
         delayText.getDocument().addDocumentListener((SimpleDocumentListener) e -> {
-            valueRequestDelayBuilder.setArgumentTypeEnum(ArgumentTypeEnum.DELTA_MS);
+            valueRequestDelayBuilder.setArgumentTypeEnum(DELTA_MS);
             valueRequestDelayBuilder.setValue(Integer.parseInt(delayText.getText()));
         });
         requestsText.getDocument().addDocumentListener((SimpleDocumentListener) e -> {
@@ -142,15 +144,17 @@ public class ClientSwingForm extends JFrame {
                 case CLIENTS_NUMBER:
                     configurationBuilder.setValueArgumentData1(valueElementsCountBuilder.createValueArgumentData());
                     configurationBuilder.setValueArgumentData2(valueRequestDelayBuilder.createValueArgumentData());
+                    break;
                 case DELTA_MS:
                     configurationBuilder.setValueArgumentData1(valueElementsCountBuilder.createValueArgumentData());
                     configurationBuilder.setValueArgumentData2(valueClientsCountBuilder.createValueArgumentData());
+                    break;
                 default:
                     throw new RuntimeException("Bad configuration received!");
             }
             InitialConfiguration initialConfiguration = configurationBuilder.createInitialConfiguration();
-            List<XYChart> xyCharts = ClientCliApplication.startAndCollectCharts(initialConfiguration);
-            new SwingWrapper<>(xyCharts).displayChartMatrix();
+            List<XYChart> xyChart = ClientCliApplication.startAndCollectChart(initialConfiguration);
+            new SwingWrapper<>(xyChart).displayChartMatrix();
         });
     }
 
