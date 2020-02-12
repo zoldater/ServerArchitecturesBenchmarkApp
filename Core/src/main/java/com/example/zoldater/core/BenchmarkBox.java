@@ -1,36 +1,49 @@
 package com.example.zoldater.core;
 
+import org.apache.commons.lang3.tuple.Pair;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class BenchmarkBox {
-    private final List<Long> clientAvgTimes;
+    private final List<Pair<Long, Long>> clientTimes;
     private long tmpClientStart;
-    private final List<Long> processingAvgTimes;
+    private long firstClientFinishTime = -1;
+    private final List<Pair<Long, Long>> processingTimes;
     private long tmpProcessingStart;
-    private final List<Long> sortingAvgTimes;
+    private final List<Pair<Long, Long>> sortingTimes;
     private long tmpSortingStart;
 
     public static BenchmarkBox create() {
         return new BenchmarkBox(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
     }
 
-    private BenchmarkBox(List<Long> clientAvgTimes, List<Long> processingAvgTimes, List<Long> sortingAvgTimes) {
-        this.clientAvgTimes = clientAvgTimes;
-        this.processingAvgTimes = processingAvgTimes;
-        this.sortingAvgTimes = sortingAvgTimes;
+    private BenchmarkBox(List<Pair<Long, Long>> clientTimes, List<Pair<Long, Long>> processingTimes, List<Pair<Long, Long>> sortingTimes) {
+        this.clientTimes = clientTimes;
+        this.processingTimes = processingTimes;
+        this.sortingTimes = sortingTimes;
     }
 
-    public List<Long> getClientAvgTimes() {
-        return clientAvgTimes;
+    public List<Long> getClientTimes() {
+        return clientTimes.stream()
+                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .map(Pair::getRight)
+                .collect(Collectors.toList());
     }
 
-    public List<Long> getProcessingAvgTimes() {
-        return processingAvgTimes;
+    public List<Long> getProcessingTimes() {
+        return processingTimes.stream()
+                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .map(Pair::getRight)
+                .collect(Collectors.toList());
     }
 
-    public List<Long> getSortingAvgTimes() {
-        return sortingAvgTimes;
+    public List<Long> getSortingTimes() {
+        return sortingTimes.stream()
+                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .map(Pair::getRight)
+                .collect(Collectors.toList());
     }
 
     public void startClientSession() {
@@ -38,7 +51,10 @@ public class BenchmarkBox {
     }
 
     public void finishClientSession() {
-        clientAvgTimes.add(System.currentTimeMillis() - tmpClientStart);
+        long currTime = System.currentTimeMillis();
+        clientTimes.add(Pair.of(currTime, currTime - tmpClientStart));
+        if (firstClientFinishTime == -1) firstClientFinishTime = currTime;
+
     }
 
     public void startProcessing() {
@@ -46,7 +62,8 @@ public class BenchmarkBox {
     }
 
     public void finishProcessing() {
-        processingAvgTimes.add(System.currentTimeMillis() - tmpProcessingStart);
+        long currTime = System.currentTimeMillis();
+        processingTimes.add(Pair.of(currTime, currTime - tmpProcessingStart));
     }
 
     public void startSorting() {
@@ -54,8 +71,12 @@ public class BenchmarkBox {
     }
 
     public void finishSorting() {
-        sortingAvgTimes.add(System.currentTimeMillis() - tmpSortingStart);
+        long currTime = System.currentTimeMillis();
+        sortingTimes.add(Pair.of(currTime, currTime - tmpSortingStart));
     }
 
 
+    public long getFirstClientFinishTime() {
+        return firstClientFinishTime;
+    }
 }

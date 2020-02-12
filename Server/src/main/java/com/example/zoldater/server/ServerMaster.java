@@ -3,25 +3,28 @@ package com.example.zoldater.server;
 import com.example.zoldater.core.BenchmarkBox;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
+import com.example.zoldater.core.exception.UnexpectedResponseException;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos;
-import ru.spbau.mit.core.proto.ResultsProtos;
+import ru.spbau.mit.core.proto.ConfigurationProtos.ConfigurationResponse;
+import ru.spbau.mit.core.proto.ResultsProtos.IterationResultsMessage;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 public class ServerMaster {
     private AbstractServer server;
-
-    private final ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
+    private Thread serverThread;
+    private final Object shutdownLock = new Object();
 
 
     public void start() {
@@ -29,67 +32,90 @@ public class ServerMaster {
         Socket socket = null;
         InputStream is = null;
         OutputStream os = null;
-        try {
-            Semaphore semaphoreSending = new Semaphore(1);
-            semaphoreSending.acquire();
-            serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
-            socket = serverSocket.accept();
-            is = socket.getInputStream();
-            os = socket.getOutputStream();
-            ConfigurationProtos.ArchitectureRequest architectureRequest = Utils.readArchitectureRequest(is);
-            int architectureCode = 0;
-            if (architectureRequest != null) {
-                architectureCode = architectureRequest.getArchitectureCode();
-            }
-            List<BenchmarkBox> benchmarkBoxes = new ArrayList<>();
+        while (true) {
+            try {
+                Semaphore semaphoreSending = new Semaphore(1);
+                semaphoreSending.acquire();
+                serverSocket = new ServerSocket(PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
+                socket = serverSocket.accept();
+                is = socket.getInputStream();
+                os = socket.getOutputStream();
+                ConfigurationProtos.ConfigurationRequest configurationRequest = Utils.readConfigurationRequest(is);
+                if (configurationRequest == null) {
+                    throw new UnexpectedResponseException("Configuration request from client is null!");
+                }
+                final int architectureCode = configurationRequest.getArchitectureCode();
+                final int clientsCount = configurationRequest.getClientsCount();
+                final int requestsPerClient = configurationRequest.getRequestsPerClient();
 
-            switch (architectureCode) {
-                case 1:
-                    server = new BlockingServerThread(benchmarkBoxes, semaphoreSending);
-                    break;
-                case 2:
-                    server = new BlockingServerPool(benchmarkBoxes, semaphoreSending);
-                    break;
-                case 3:
-                    server = new NonBlockingServer(benchmarkBoxes, semaphoreSending);
-                    break;
-                default:
-                    throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
-            }
+                CountDownLatch resultsSendingLatch = new CountDownLatch(clientsCount);
 
-            serverExecutor.submit(server);
-            semaphoreSending.acquire();
-            ConfigurationProtos.ArchitectureResponse response = ConfigurationProtos.ArchitectureResponse.newBuilder()
-                    .setConnectionPort(PortConstantEnum.SERVER_PROCESSING_PORT.getPort())
-                    .build();
-            Utils.writeToStream(response, os);
+                switch (architectureCode) {
+                    case 1:
+                        server = new BlockingServerThread(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
+                        break;
+                    case 2:
+                        server = new BlockingServerPool(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
+                        break;
+                    case 3:
+                        server = new NonBlockingServer(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
+                        break;
+                    default:
+                        throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
+                }
 
-            ResultsProtos.Request request = Utils.readResultsRequest(is);
-            server.shutdown();
-            serverExecutor.shutdownNow();
+                serverThread = new Thread(server);
+                serverThread.start();
+                semaphoreSending.acquire();
+                ConfigurationResponse response = ConfigurationResponse.newBuilder()
+                        .setIsSuccessful(true)
+                        .build();
+                Utils.writeToStream(response, os);
 
-            List<Long> clientTimes = new ArrayList<>();
-            List<Long> processingTimes = new ArrayList<>();
-            List<Long> sortingTimes = new ArrayList<>();
-            benchmarkBoxes.forEach(box -> clientTimes.add(box.getClientAvgTimes().get(0)));
-            benchmarkBoxes.forEach(box -> processingTimes.add((long) box.getProcessingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
-            benchmarkBoxes.forEach(box -> sortingTimes.add((long) box.getSortingAvgTimes().stream().mapToLong(it -> it).average().orElse(0)));
-            ResultsProtos.Response resultsResponse = ResultsProtos.Response.newBuilder()
-                    .addAllClientTimes(clientTimes)
-                    .addAllProcessingTimes(processingTimes)
-                    .addAllSortingTimes(sortingTimes)
-                    .build();
-            Utils.writeToStream(resultsResponse, os);
-        } catch (IOException | InterruptedException e) {
-            Logger.error(e);
-            throw new RuntimeException(e);
-        } finally {
-            Utils.closeResources(socket, is, os);
-            if (serverSocket != null) {
-                try {
-                    serverSocket.close();
-                } catch (IOException e) {
-                    Logger.error(e);
+                resultsSendingLatch.await();
+
+                server.shutdown();
+                serverThread.interrupt();
+
+                final List<BenchmarkBox> benchmarkBoxes = server.getBenchmarkBoxes();
+                final double avgClientTime = benchmarkBoxes.stream()
+                        .map(BenchmarkBox::getClientTimes)
+                        .flatMap(Collection::stream)
+                        .mapToLong(it -> it)
+                        .average()
+                        .orElse(0);
+                final double avgProcessingTime = benchmarkBoxes.stream()
+                        .map(BenchmarkBox::getProcessingTimes)
+                        .flatMap(Collection::stream)
+                        .mapToLong(it -> it)
+                        .average()
+                        .orElse(0);
+                final double avgSortingTime = benchmarkBoxes.stream()
+                        .map(BenchmarkBox::getSortingTimes)
+                        .flatMap(Collection::stream)
+                        .mapToLong(it -> it)
+                        .average()
+                        .orElse(0);
+
+                IterationResultsMessage resultsMessage = IterationResultsMessage.newBuilder()
+                        .setAverageClientTime(avgClientTime / requestsPerClient)
+                        .setAverageProcessingTime(avgProcessingTime)
+                        .setAverageSortingTime(avgSortingTime)
+                        .build();
+                Utils.writeToStream(resultsMessage, os);
+                Logger.info("resultsMessage sent!");
+
+            } catch (IOException | InterruptedException e) {
+                Logger.error(e);
+                throw new RuntimeException(e);
+            } finally {
+                Utils.closeResources(socket, is, os);
+                if (serverSocket != null) {
+                    try {
+                        serverSocket.close();
+                    } catch (IOException e) {
+                        Logger.error(e);
+                    }
                 }
             }
         }

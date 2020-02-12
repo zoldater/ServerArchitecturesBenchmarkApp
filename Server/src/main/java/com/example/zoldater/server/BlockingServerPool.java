@@ -17,23 +17,28 @@ public class BlockingServerPool extends AbstractBlockingServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
     private final ExecutorService sortingService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-    protected BlockingServerPool(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
-        super(benchmarkBoxes, semaphoreSending);
+    protected BlockingServerPool(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
+        super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
     }
 
 
     @Override
-    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message) throws ExecutionException, InterruptedException {
-        Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> Utils.processSortingMessage(message));
+    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
+        Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> {
+            final SortingProtos.SortingMessage message1 = Utils.processSortingMessage(message);
+            benchmarkBox.finishSorting();
+            return message1;
+        });
         SortingProtos.SortingMessage sortedMessage = messageFuture.get();
         return sortedMessage;
     }
 
     @Override
-    public void send(SortingProtos.SortingMessage message, OutputStream outputStream) {
+    public void send(SortingProtos.SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
         sendingService.submit(() -> {
             try {
                 Utils.writeToStream(message, outputStream);
+                benchmarkBox.finishProcessing();
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
@@ -43,8 +48,8 @@ public class BlockingServerPool extends AbstractBlockingServer {
 
     @Override
     protected void stopWork() {
-        sortingService.shutdownNow();
-        sendingService.shutdownNow();
         super.stopWork();
+        sortingService.shutdown();
+        sendingService.shutdown();
     }
 }

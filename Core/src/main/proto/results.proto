@@ -3,12 +3,8 @@ syntax = "proto3";
 option java_package = "ru.spbau.mit.core.proto";
 option java_outer_classname = "ResultsProtos";
 
-message Request {
-    int32 code = 1;
-}
-
-message Response {
-    repeated int64 clientTimes = 1;
-    repeated int64 processingTimes = 2;
-    repeated int64 sortingTimes = 3;
+message IterationResultsMessage {
+    double averageClientTime = 1;
+    double averageProcessingTime = 2;
+    double averageSortingTime = 3;
 }

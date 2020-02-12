@@ -9,19 +9,17 @@ import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 
 public abstract class AbstractBlockingServer extends AbstractServer {
+    protected volatile boolean isUnlocked = false;
 
-
-    protected AbstractBlockingServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
-        super(benchmarkBoxes, semaphoreSending);
+    protected AbstractBlockingServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
+        super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
     }
+
 
     @Override
     public void run() {
@@ -31,13 +29,12 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             e.printStackTrace();
         }
         semaphoreSending.release();
-        while (!getServerSocket().isClosed()) {
+        while (!serverSocket.isClosed()) {
             Socket socket;
             try {
-                socket = getServerSocket().accept();
+                socket = serverSocket.accept();
                 BenchmarkBox benchmarkBox = BenchmarkBox.create();
                 benchmarkBoxes.add(benchmarkBox);
-                benchmarkBox.startClientSession();
                 Thread thread = new Thread(() -> processSingleClient(socket, benchmarkBox));
                 clientThreads.add(thread);
                 thread.start();
@@ -48,40 +45,45 @@ public abstract class AbstractBlockingServer extends AbstractServer {
     }
 
     public void processSingleClient(Socket socket, BenchmarkBox benchmarkBox) {
-        InputStream inputStream = null;
-        OutputStream outputStream = null;
         try {
-            inputStream = socket.getInputStream();
-            outputStream = socket.getOutputStream();
-            while (!socket.isClosed()) {
+            countDownLatch.countDown();
+            countDownLatch.await();
+            benchmarkBox.startClientSession();
+            InputStream inputStream = socket.getInputStream();
+            OutputStream outputStream = socket.getOutputStream();
+            for (int i = 0; i < requestsPerClient && !isUnlocked; i++) {
                 benchmarkBox.startProcessing();
                 SortingProtos.SortingMessage sortingMessage = Utils.readSortingMessage(inputStream);
                 if (sortingMessage == null) {
-                    break;
+                    throw new RuntimeException("Sorting message is null");
                 }
                 benchmarkBox.startSorting();
-                SortingProtos.SortingMessage sortedMessage = sort(sortingMessage);
-                benchmarkBox.finishSorting();
-                send(sortedMessage, outputStream);
-                benchmarkBox.finishProcessing();
+                SortingProtos.SortingMessage sortedMessage = sort(sortingMessage, benchmarkBox);
+                if (sortedMessage == null) {
+                    return;
+                }
+                send(sortedMessage, outputStream, benchmarkBox);
             }
-        } catch (IOException | InterruptedException | ExecutionException e) {
+            resultsSendingLatch.countDown();
+            benchmarkBox.finishClientSession();
+        } catch (IOException | ExecutionException e) {
             Logger.error(e);
             throw new RuntimeException(e);
-        } finally {
-            benchmarkBox.finishClientSession();
+        } catch (InterruptedException ignored) {
+            // If any thread finished session, another threads will be interrupted
+            // for collecting stats
         }
     }
 
-    public abstract SortingMessage sort(SortingMessage message) throws ExecutionException, InterruptedException;
+    public abstract SortingMessage sort(SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException;
 
-    public abstract void send(SortingMessage message, OutputStream outputStream) throws IOException;
+    public abstract void send(SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws IOException, ExecutionException, InterruptedException;
 
     @Override
     public void shutdown() {
         try {
-            serverSocket.close();
             stopWork();
+            serverSocket.close();
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);

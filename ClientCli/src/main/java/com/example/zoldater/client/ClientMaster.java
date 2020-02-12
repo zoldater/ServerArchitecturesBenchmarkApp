@@ -1,19 +1,16 @@
 package com.example.zoldater.client;
 
-import com.example.zoldater.core.BenchmarkBox;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.InitialConfiguration;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.configuration.data.VariableArgumentData;
-import com.example.zoldater.core.enums.ArgumentTypeEnum;
-import com.example.zoldater.core.enums.PortConstantEnum;
+import com.example.zoldater.core.exception.InvalidConfigurationException;
 import com.opencsv.CSVWriter;
 import org.knowm.xchart.BitmapEncoder;
 import org.knowm.xchart.QuickChart;
 import org.knowm.xchart.XYChart;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.ConfigurationProtos;
-import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureResponse;
+import ru.spbau.mit.core.proto.ConfigurationProtos.ConfigurationResponse;
 import ru.spbau.mit.core.proto.ResultsProtos;
 
 import java.io.*;
@@ -26,10 +23,13 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.example.zoldater.core.enums.PortConstantEnum.SERVER_CONFIGURATION_PORT;
+import static ru.spbau.mit.core.proto.ConfigurationProtos.ConfigurationRequest;
+
 public class ClientMaster {
     private final InitialConfiguration initialConfiguration;
     private final ExecutorService sortingConnectionService = Executors.newCachedThreadPool();
-
+    private final List<IterationBenchmarkResults> resultsList = new ArrayList<>();
 
     private final List<XYChart> charts = new ArrayList<>();
 
@@ -45,21 +45,26 @@ public class ClientMaster {
 
 
     public void start() {
-        Socket socket = null;
-        try {
-            socket = new Socket(initialConfiguration.getServerAddress(), PortConstantEnum.SERVER_CONFIGURATION_PORT.getPort());
-            InputStream inputStream = socket.getInputStream();
-            OutputStream outputStream = socket.getOutputStream();
-            ConfigurationProtos.ArchitectureRequest request = ConfigurationProtos.ArchitectureRequest.newBuilder()
-                    .setArchitectureCode(initialConfiguration.getArchitectureType().getCode())
-                    .build();
-            Utils.writeToStream(request, outputStream);
+        List<SingleIterationConfiguration> iterationConfigurations = SingleIterationConfiguration.fromInitialConfiguration(initialConfiguration);
 
-            ArchitectureResponse response = Utils.readArchitectureResponse(inputStream);
-            List<SingleIterationConfiguration> iterationConfigurations = SingleIterationConfiguration.fromInitialConfiguration(initialConfiguration);
-
-            iterationConfigurations.forEach(config -> {
+        iterationConfigurations.forEach(config -> {
+            Socket socket = null;
+            try {
+                socket = new Socket(initialConfiguration.getServerAddress(), SERVER_CONFIGURATION_PORT.getPort());
+                InputStream inputStream = socket.getInputStream();
+                OutputStream outputStream = socket.getOutputStream();
                 Logger.info("Started new config!");
+
+                final ConfigurationRequest configurationRequest = ConfigurationRequest.newBuilder()
+                        .setArchitectureCode(config.getArchitectureType().code)
+                        .setClientsCount(config.getClientsNumber().getValue())
+                        .setRequestsPerClient(config.getRequestsPerClient().getValue())
+                        .build();
+                Utils.writeToStream(configurationRequest, outputStream);
+                final ConfigurationResponse configurationResponse = Utils.readConfigurationResponse(inputStream);
+                if (configurationResponse == null || !configurationResponse.getIsSuccessful()) {
+                    throw new RuntimeException("Bad response on configuration request!");
+                }
                 int clientsNumber = config.getClientsNumber().getValue();
                 List<Client> clients = IntStream.range(0, clientsNumber)
                         .mapToObj(it -> new Client(config))
@@ -74,23 +79,45 @@ public class ClientMaster {
                         throw new RuntimeException(e);
                     }
                 });
-            });
-            ResultsProtos.Request resultRequest = ResultsProtos.Request.getDefaultInstance();
-            Utils.writeToStream(resultRequest, outputStream);
-            ResultsProtos.Response resultsResponse = Utils.readResultsResponse(inputStream);
-            saveResultsToCsvAndImage(resultsResponse, initialConfiguration);
 
-        } catch (IOException e) {
-            Logger.error(e);
-            throw new RuntimeException(e);
-        } finally {
-            sortingConnectionService.shutdownNow();
-            Utils.closeResources(socket, null, null);
-        }
+                final ResultsProtos.IterationResultsMessage resultsResponse = Utils.readResults(inputStream);
+                Logger.info("results received!");
+                if (resultsResponse == null) {
+                    throw new RuntimeException("Bad response on results request!");
+                }
+                int variableValue = 0;
+                switch (initialConfiguration.getVariableArgumentData().getArgumentTypeEnum()) {
+                    case ARRAY_ELEMENTS:
+                        variableValue = config.getArrayElements().getValue();
+                        break;
+                    case CLIENTS_NUMBER:
+                        variableValue = config.getClientsNumber().getValue();
+                        break;
+                    case DELTA_MS:
+                        variableValue = config.getDeltaMs().getValue();
+                        break;
+                    default:
+                        throw new InvalidConfigurationException("Unexpected variable type - " +
+                                initialConfiguration.getVariableArgumentData().getArgumentTypeEnum());
+                }
+                resultsList.add(new IterationBenchmarkResults(variableValue,
+                        resultsResponse.getAverageClientTime(), resultsResponse.getAverageProcessingTime(), resultsResponse.getAverageSortingTime()));
+
+            saveResultsToCsvAndImage(resultsList, initialConfiguration);
+
+            } catch (IOException e) {
+                Logger.error(e);
+                throw new RuntimeException(e);
+            } finally {
+                sortingConnectionService.shutdownNow();
+                Utils.closeResources(socket, null, null);
+            }
+        });
 
     }
 
-    private void saveResultsToCsvAndImage(ResultsProtos.Response response, InitialConfiguration configuration) throws IOException {
+
+    private void saveResultsToCsvAndImage(List<IterationBenchmarkResults> resultsList, InitialConfiguration configuration) throws IOException {
         String fileName = System.getProperty("user.dir") + "/Statistics/" +
                 "A=" +
                 configuration.getArchitectureType().code +
@@ -121,32 +148,19 @@ public class ClientMaster {
         CSVWriter writer = new CSVWriter(new FileWriter(csvResultFile));
         writer.writeNext(new String[]{configuration.getVariableArgumentData().getArgumentTypeEnum().getLiteral(), "M1", "M2", "M3"});
         VariableArgumentData variableArgumentData = configuration.getVariableArgumentData();
-        int[] bunchSizes;
-        int[] values = IntStream.iterate(variableArgumentData.getFrom(), it -> it < variableArgumentData.getTo(), it -> it + variableArgumentData.getStep()).toArray();
-        int iterations = values.length;
 
-        if (variableArgumentData.getArgumentTypeEnum() != ArgumentTypeEnum.CLIENTS_NUMBER) {
-            bunchSizes = IntStream.range(0, iterations)
-                    .map(it -> configuration.getValueArgumentData1().getArgumentTypeEnum() == ArgumentTypeEnum.CLIENTS_NUMBER
-                            ? configuration.getValueArgumentData1().getValue()
-                            : configuration.getValueArgumentData2().getValue())
-                    .toArray();
-        } else {
-            bunchSizes = values;
-        }
-
-
-        double[] clientTimesPerIteration = processSingleList(response.getClientTimesList(), bunchSizes);
-        double[] processingTimesPerIteration = processSingleList(response.getProcessingTimesList(), bunchSizes);
-        double[] sortingTimesPerIteration = processSingleList(response.getSortingTimesList(), bunchSizes);
+        int[] values = resultsList.stream().map(it -> it.variableValue).mapToInt(it -> it).toArray();
+        double[] averageClientTimes = resultsList.stream().map(it -> it.averageClientTime).mapToDouble(it -> it).toArray();
+        double[] averageProcessingTimes = resultsList.stream().map(it -> it.averageProcessingTime).mapToDouble(it -> it).toArray();
+        double[] averageSortingTimes = resultsList.stream().map(it -> it.averageSortingTime).mapToDouble(it -> it).toArray();
 
         for (int i = 0; i < values.length; i++) {
             writer.writeNext(
                     new String[]{
                             Integer.toString(values[i]),
-                            Double.toString(clientTimesPerIteration[i]),
-                            Double.toString(processingTimesPerIteration[i]),
-                            Double.toString(sortingTimesPerIteration[i])
+                            Double.toString(averageClientTimes[i]),
+                            Double.toString(averageProcessingTimes[i]),
+                            Double.toString(averageSortingTimes[i])
                     });
         }
         writer.flush();
@@ -154,7 +168,7 @@ public class ClientMaster {
         String variableArgTypeLiteral = variableArgumentData.getArgumentTypeEnum().getLiteral();
         double[] xData = Arrays.stream(values).mapToDouble(it -> it).toArray();
 
-        double[][] yData = new double[][]{clientTimesPerIteration, processingTimesPerIteration, sortingTimesPerIteration};
+        double[][] yData = new double[][]{averageClientTimes, averageProcessingTimes, averageSortingTimes};
 
         XYChart chart = QuickChart.getChart("Statistics", variableArgTypeLiteral, "Time, ms",
                 new String[]{"Average Per Client Time", "Average Processing Time", "Average Sorting Time"},
@@ -167,18 +181,22 @@ public class ClientMaster {
         }
     }
 
-    private static double[] processSingleList(List<Long> list, int[] bunchSizes) {
-        double[] result = new double[bunchSizes.length];
-        int sublistIndex = 0;
-        for (int i = 0; i < bunchSizes.length - 1; i++) {
-            result[i] = list.subList(sublistIndex, sublistIndex + bunchSizes[i]).stream().mapToLong(it -> it).average().orElse(0);
-            sublistIndex += bunchSizes[i];
-        }
-        result[result.length - 1] = list.subList(sublistIndex, list.size()).stream().mapToLong(it -> it).average().orElse(0);
-        return result;
-    }
-
     public List<XYChart> getCharts() {
         return charts;
     }
+
+    private static final class IterationBenchmarkResults {
+        private final int variableValue;
+        private final double averageClientTime;
+        private final double averageProcessingTime;
+        private final double averageSortingTime;
+
+        private IterationBenchmarkResults(int variableValue, double averageClientTime, double averageProcessingTime, double averageSortingTime) {
+            this.variableValue = variableValue;
+            this.averageClientTime = averageClientTime;
+            this.averageProcessingTime = averageProcessingTime;
+            this.averageSortingTime = averageSortingTime;
+        }
+    }
 }
+

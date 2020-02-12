@@ -3,9 +3,8 @@ package com.example.zoldater.core;
 import org.jetbrains.annotations.Nullable;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos;
-import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureRequest;
-import ru.spbau.mit.core.proto.ConfigurationProtos.ArchitectureResponse;
 import ru.spbau.mit.core.proto.ResultsProtos;
+import ru.spbau.mit.core.proto.ResultsProtos.IterationResultsMessage;
 import ru.spbau.mit.core.proto.SortingProtos;
 
 import java.io.*;
@@ -13,6 +12,8 @@ import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static ru.spbau.mit.core.proto.SortingProtos.*;
 
 public class Utils {
 
@@ -25,47 +26,38 @@ public class Utils {
         dataOutputStream.flush();
     }
 
-    public static SortingProtos.SortingMessage readSortingMessage(InputStream inputStream) throws IOException {
+    public static SortingMessage readSortingMessage(InputStream inputStream) throws IOException {
         try {
             byte[] bytes = receiveBytes(inputStream);
-            return SortingProtos.SortingMessage.parseFrom(bytes);
+            return SortingMessage.parseFrom(bytes);
         } catch (EOFException e) {
             return null;
         }
     }
 
-    public static ArchitectureRequest readArchitectureRequest(InputStream inputStream) throws IOException {
+    public static ConfigurationProtos.ConfigurationRequest readConfigurationRequest(InputStream inputStream) throws IOException {
         try {
             byte[] bytes = receiveBytes(inputStream);
-            return ArchitectureRequest.parseFrom(bytes);
+            return ConfigurationProtos.ConfigurationRequest.parseFrom(bytes);
         } catch (EOFException e) {
             return null;
         }
     }
 
-    public static ResultsProtos.Request readResultsRequest(InputStream inputStream) throws IOException {
+    public static ConfigurationProtos.ConfigurationResponse readConfigurationResponse(InputStream inputStream) throws IOException {
         try {
             byte[] bytes = receiveBytes(inputStream);
-            return ResultsProtos.Request.parseFrom(bytes);
-        } catch (EOFException e) {
-            return null;
-        }
-    }
-
-    public static ArchitectureResponse readArchitectureResponse(InputStream inputStream) throws IOException {
-        try {
-            byte[] bytes = receiveBytes(inputStream);
-            return ArchitectureResponse.parseFrom(bytes);
+            return ConfigurationProtos.ConfigurationResponse.parseFrom(bytes);
         } catch (EOFException e) {
             return null;
         }
 
     }
 
-    public static ResultsProtos.Response readResultsResponse(InputStream inputStream) throws IOException {
+    public static IterationResultsMessage readResults(InputStream inputStream) throws IOException {
         try {
             byte[] bytes = receiveBytes(inputStream);
-            return ResultsProtos.Response.parseFrom(bytes);
+            return IterationResultsMessage.parseFrom(bytes);
         } catch (EOFException e) {
             return null;
         }
@@ -82,26 +74,26 @@ public class Utils {
         return messageBytes;
     }
 
-    public static SortingProtos.SortingMessage processSortingMessage(@Nullable SortingProtos.SortingMessage message) {
+    public static SortingMessage processSortingMessage(@Nullable SortingMessage message) {
         if (message == null) {
             return null;
         }
-        int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
+        int[] arr = message.getElements2List().stream().mapToInt(Integer::intValue).toArray();
         bubbleSort(arr);
-        SortingProtos.SortingMessage.Builder builder = SortingProtos.SortingMessage.newBuilder();
         List<Integer> sortedElements = Arrays.stream(arr).boxed().collect(Collectors.toList());
-        builder.addAllElements(sortedElements);
-        return builder.build();
+        return SortingMessage.newBuilder()
+                .setElementsCount1(arr.length)
+                .addAllElements2(sortedElements)
+                .build();
     }
 
     private static void bubbleSort(int[] arr) {
-        int n = arr.length;
-        for (int i = 0; i < n; i++) {
-            for (int j = 1; j < (n - i); j++) {
-                if (arr[j - 1] > arr[j]) {
-                    int tmp = arr[j - 1];
-                    arr[j - 1] = arr[j];
-                    arr[j] = tmp;
+        for (int i = 0; i < arr.length; i++) {
+            for (int j = i; j < arr.length; j++) {
+                if (arr[i] > arr[j]) {
+                    int tmp = arr[j];
+                    arr[j] = arr[i];
+                    arr[i] = tmp;
                 }
             }
         }

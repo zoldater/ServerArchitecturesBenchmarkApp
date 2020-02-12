@@ -153,7 +153,7 @@ public class ClientSwingForm extends JFrame {
                     throw new RuntimeException("Bad configuration received!");
             }
             InitialConfiguration initialConfiguration = configurationBuilder.createInitialConfiguration();
-            List<XYChart> xyChart = ClientCliApplication.startAndCollectChart(initialConfiguration);
+            List<XYChart> xyChart = ClientCliApplication.startAndCollectCharts(initialConfiguration);
             new SwingWrapper<>(xyChart).displayChartMatrix();
         });
     }

@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":Core"))
     implementation("org.tinylog", "tinylog-api", "2.0.1")
     implementation("org.tinylog", "tinylog-impl", "2.0.1")
+    implementation("org.apache.commons:commons-lang3:3.9")
     implementation("com.intellij:annotations:+@jar")
     testImplementation("junit", "junit", "4.12")
 }

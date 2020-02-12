@@ -3,15 +3,18 @@ package com.example.zoldater.client;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.enums.PortConstantEnum;
+import com.example.zoldater.core.exception.UnexpectedResponseException;
 import com.google.common.collect.Ordering;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class Client implements Runnable {
     private Socket socket;
@@ -30,7 +33,9 @@ public class Client implements Runnable {
             socket = new Socket(configuration.getServerAddress(), PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
             is = socket.getInputStream();
             os = socket.getOutputStream();
-            startScheduling();
+            for (int j = 0; j < configuration.getRequestsPerClient().getValue(); j++) {
+                process();
+            }
         } catch (IOException e) {
             Logger.error(e);
             throw new RuntimeException(e);
@@ -39,37 +44,30 @@ public class Client implements Runnable {
         }
     }
 
-    private void startScheduling() throws IOException {
-
-        for (int j = 0; j < configuration.getRequestsPerClient().getValue(); j++) {
-            process();
-            try {
-                Thread.sleep(configuration.getDeltaMs().getValue());
-            } catch (InterruptedException e) {
-                Logger.error(e);
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     protected void process() throws IOException {
         SortingMessage msg = generateMessage();
         Utils.writeToStream(msg, os);
         SortingMessage receivedMessage = Utils.readSortingMessage(is);
-        List<Integer> list = receivedMessage != null ? receivedMessage.getElementsList() : null;
+        if (receivedMessage == null) {
+            throw new UnexpectedResponseException("Received sortingMessage is null!");
+        }
+        List<Integer> list = receivedMessage.getElements2List();
         boolean ordered = Ordering.natural().isOrdered(list);
         if (!ordered) {
-            Logger.error("Response message not sorted!");
+            throw new UnexpectedResponseException("Received sortingMessage is not sorted!");
         }
     }
 
     protected SortingMessage generateMessage() {
-        SortingMessage.Builder builder1 = SortingMessage.newBuilder();
-        builder1.addAllElements(new Random().ints()
-                .boxed()
-                .limit(configuration.getArrayElements().getValue())
-                .collect(Collectors.toList()));
-        return builder1.build();
+        return SortingMessage.newBuilder()
+                .addAllElements2(
+                        new Random().ints()
+                                .boxed()
+                                .limit(configuration.getArrayElements().getValue())
+                                .collect(Collectors.toList())
+                )
+                .setElementsCount1(configuration.getArrayElements().getValue())
+                .build();
     }
 
 

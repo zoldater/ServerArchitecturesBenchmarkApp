@@ -12,15 +12,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.*;
 
 public class NonBlockingServer extends AbstractServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
@@ -29,8 +22,8 @@ public class NonBlockingServer extends AbstractServer {
     private Selector writeSelector;
     private ServerSocketChannel serverSocketChannel;
 
-    protected NonBlockingServer(List<BenchmarkBox> benchmarkBoxes, Semaphore semaphoreSending) {
-        super(benchmarkBoxes, semaphoreSending);
+    protected NonBlockingServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
+        super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
     }
 
 
@@ -146,7 +139,7 @@ public class NonBlockingServer extends AbstractServer {
                 int bytesCount = channel.read(attachment.messageSizeBuffer);
                 if (bytesCount < 0) {
                     selectionKey.cancel();
-                    attachment.finishClientSession();
+//                    attachment.finishClientSession();
                 } else {
                     attachment.startProcessing();
                 }
@@ -229,9 +222,9 @@ public class NonBlockingServer extends AbstractServer {
             benchmarkBox.startClientSession();
         }
 
-        public void finishClientSession() {
-            benchmarkBox.finishClientSession();
-        }
+//        public void finishClientSession() {
+//            benchmarkBox.finishClientSession();
+//        }
 
         public void startProcessing() {
             benchmarkBox.startProcessing();
