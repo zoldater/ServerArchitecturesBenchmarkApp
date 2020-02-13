@@ -5,28 +5,26 @@ import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.tinylog.Logger;
-import ru.spbau.mit.core.proto.SortingProtos;
+import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class NonBlockingServer extends AbstractServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
     private final ExecutorService sortingService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private Selector readSelector;
     private Selector writeSelector;
-    private int connectedClients = 0;
-    private long realStartTime;
     private ServerSocketChannel serverSocketChannel;
-    private final Map<SocketChannel, MessageAttachment> channelToAttachmentMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, ByteBuffer> channelToSizeBuffersMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, ByteBuffer> channelToContentBuffersMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, BenchmarkBox> channelToBenchmarkBoxMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, Integer> channelToIterationsMap = new ConcurrentHashMap<>();
 
     protected NonBlockingServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
         super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
@@ -58,15 +56,16 @@ public class NonBlockingServer extends AbstractServer {
                         }
                         keyIterator.remove();
                     }
-                    writeSelector.selectNow();
-                    keyIterator = writeSelector.selectedKeys().iterator();
-                    while (keyIterator.hasNext()) {
-                        SelectionKey key = keyIterator.next();
-
-                        if (key.isWritable()) {
-                            write(key);
+                    int selectedWrite = writeSelector.selectNow();
+                    if (selectedWrite > 0) {
+                        keyIterator = writeSelector.selectedKeys().iterator();
+                        while (keyIterator.hasNext()) {
+                            SelectionKey key = keyIterator.next();
+                            if (key.isWritable()) {
+                                write(key);
+                            }
+                            keyIterator.remove();
                         }
-                        keyIterator.remove();
                     }
                 } catch (ClosedSelectorException e) {
                     return;
@@ -76,7 +75,6 @@ public class NonBlockingServer extends AbstractServer {
             }
         } catch (IOException e) {
             Logger.error(e);
-            return;
         } finally {
             shutdown();
         }
@@ -89,14 +87,12 @@ public class NonBlockingServer extends AbstractServer {
             socketChannel.configureBlocking(false);
             BenchmarkBox benchmarkBox = BenchmarkBox.create();
             benchmarkBoxes.add(benchmarkBox);
-            MessageAttachment attachment = new MessageAttachment(benchmarkBox);
-            attachment.startClientSession();
-            channelToAttachmentMap.put(socketChannel, attachment);
+            benchmarkBox.startClientSession();
+            ByteBuffer byteBuffer = ByteBuffer.allocate(Integer.BYTES);
+            channelToSizeBuffersMap.put(socketChannel, byteBuffer);
+            channelToBenchmarkBoxMap.put(socketChannel, benchmarkBox);
+            channelToIterationsMap.put(socketChannel, 1);
             countDownLatch.countDown();
-            connectedClients++;
-            if (connectedClients == clientsCount) {
-                realStartTime = System.currentTimeMillis();
-            }
             socketChannel.register(readSelector, SelectionKey.OP_READ);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -107,102 +103,110 @@ public class NonBlockingServer extends AbstractServer {
     private void read(SelectionKey selectionKey) {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
 
-        // Только что пришли из accept, attachment пустой
-        final MessageAttachment messageAttachment = channelToAttachmentMap.get(channel);
-        if (messageAttachment.messageSizeBuffer.remaining() == 4) {
+        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(channel);
+        ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(channel);
+
+        // Только начали читать sizeBuffer
+        if (sizeByteBuffer.position() != 4) {
             try {
-                int bytesCount = channel.read(messageAttachment.messageSizeBuffer);
-                if (bytesCount < 0) {
+                long readBytes = channel.read(sizeByteBuffer);
+                if (readBytes == -1) {
                     selectionKey.cancel();
+                    benchmarkBox.finishClientSession();
                 } else {
-                    messageAttachment.startProcessing();
+                    benchmarkBox.startProcessing();
                 }
-                if (messageAttachment.messageSizeBuffer.position() == 4) {
-                    messageAttachment.messageSizeBuffer.flip();
-                    messageAttachment.messageContentSize = messageAttachment.messageSizeBuffer.getInt();
-                    messageAttachment.messageContent = ByteBuffer.allocate(messageAttachment.messageContentSize);
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            try {
-                channel.read(messageAttachment.messageContent);
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
             }
-            if (messageAttachment.messageContent.position() == messageAttachment.messageContentSize) {
-                messageAttachment.messageContent.flip();
-                final Semaphore semaphore = new Semaphore(1);
-                try {
-                    semaphore.acquire();
-                    sortingService.submit(() -> {
-                        try {
-                            byte[] messageBytesArray = messageAttachment.messageContent.array();
-                            SortingProtos.SortingMessage sortingMessage = SortingProtos.SortingMessage.parseFrom(messageBytesArray);
-                            messageAttachment.startSorting();
-                            SortingProtos.SortingMessage sortedMessage = Utils.processSortingMessage(sortingMessage);
-                            messageAttachment.finishSorting();
-                            byte[] sortedMessageBytes = sortedMessage.toByteArray();
-                            messageAttachment.messageSizeBuffer.clear();
-                            messageAttachment.messageSizeBuffer.putInt(sortedMessageBytes.length);
-                            messageAttachment.messageSizeBuffer.flip();
-                            messageAttachment.messageContent = ByteBuffer.wrap(sortedMessageBytes);
-                            semaphore.release();
-                        } catch (InvalidProtocolBufferException e) {
-                            Logger.error(e);
-                            throw new RuntimeException(e);
-                        }
-                    });
-                    semaphore.acquire();
-                    channel.register(writeSelector, SelectionKey.OP_WRITE);
-                } catch (InterruptedException | ClosedChannelException e) {
-                    throw new RuntimeException(e);
-                }
+        } else {
+            if (!channelToContentBuffersMap.containsKey(channel)) {
+                sizeByteBuffer.flip();
+                int sizeByteBufferInt = sizeByteBuffer.getInt();
+                channelToContentBuffersMap.put(channel, ByteBuffer.allocate(sizeByteBufferInt));
             }
+            ByteBuffer contentBuffer = channelToContentBuffersMap.get(channel);
+            try {
+
+                channel.read(contentBuffer);
+
+                if (contentBuffer.position() == contentBuffer.capacity()) {
+                    processContent(channel);
+                }
+
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private void processContent(SocketChannel channel) {
+        ByteBuffer messageContentByteBuffer = channelToContentBuffersMap.get(channel);
+        ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(channel);
+        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(channel);
+        messageContentByteBuffer.flip();
+        byte[] messageBytesArray = messageContentByteBuffer.array();
+        try {
+            SortingMessage sortingMessage = SortingMessage.parseFrom(messageBytesArray);
+            benchmarkBox.startSorting();
+            SortingMessage sortedMessage = Utils.processSortingMessage(sortingMessage);
+            benchmarkBox.finishSorting();
+            byte[] sortedMessageBytes = sortedMessage.toByteArray();
+            sizeByteBuffer.clear();
+            sizeByteBuffer.putInt(sortedMessageBytes.length);
+            sizeByteBuffer.flip();
+            messageContentByteBuffer.clear();
+            messageContentByteBuffer.put(ByteBuffer.wrap(sortedMessageBytes));
+            messageContentByteBuffer.flip();
+            channel.register(writeSelector, SelectionKey.OP_WRITE);
+        } catch (InvalidProtocolBufferException | ClosedChannelException e) {
+            throw new RuntimeException(e);
         }
     }
 
     private void write(SelectionKey key) {
         SocketChannel socketChannel = (SocketChannel) key.channel();
+        ByteBuffer messageContentByteBuffer = channelToContentBuffersMap.get(socketChannel);
+        ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(socketChannel);
+        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(socketChannel);
 
-        final MessageAttachment messageAttachment = channelToAttachmentMap.get(socketChannel);
-        ByteBuffer[] buffers = {
-                messageAttachment.messageSizeBuffer,
-                messageAttachment.messageContent
-        };
-        if (messageAttachment.messageSizeBuffer.position() == 4
-                && messageAttachment.messageContent.position() == messageAttachment.messageContent.capacity()) {
-            messageAttachment.finishProcessing();
-            messageAttachment.messageSizeBuffer.clear();
-            messageAttachment.messageContent.clear();
+        try {
+            socketChannel.write(new ByteBuffer[]{sizeByteBuffer, messageContentByteBuffer});
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        if (sizeByteBuffer.position() == sizeByteBuffer.capacity() &&
+                messageContentByteBuffer.position() ==
+                        messageContentByteBuffer.capacity()) {
+            benchmarkBox.finishProcessing();
+            sizeByteBuffer.clear();
+            messageContentByteBuffer.clear();
             key.cancel();
-        } else {
-            sendingService.submit(() -> {
-                try {
-                    socketChannel.write(buffers);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            try {
-                socketChannel.register(writeSelector, SelectionKey.OP_WRITE);
-                Logger.info("register writeSelector in write");
-            } catch (ClosedChannelException e) {
-                throw new RuntimeException(e);
+            Integer integer = channelToIterationsMap.get(socketChannel);
+            channelToIterationsMap.put(socketChannel, integer + 1);
+            if (integer == requestsPerClient) {
+                benchmarkBox.finishClientSession();
+                resultsSendingLatch.countDown();
             }
         }
     }
-
 
     @Override
     public void shutdown() {
         try {
             readSelector.close();
+            writeSelector.close();
             sortingService.shutdownNow();
             sendingService.shutdownNow();
-            writeSelector.close();
+            for (SocketChannel socketChannel : channelToIterationsMap.keySet()) {
+                socketChannel.close();
+            }
+            channelToIterationsMap.clear();
+            channelToSizeBuffersMap.clear();
+            channelToContentBuffersMap.clear();
+
+            channelToBenchmarkBoxMap.clear();
             while (!sortingService.awaitTermination(1, TimeUnit.SECONDS)) {
             }
             while (!sendingService.awaitTermination(1, TimeUnit.SECONDS)) {
@@ -213,44 +217,5 @@ public class NonBlockingServer extends AbstractServer {
             throw new RuntimeException(e);
         }
 
-    }
-
-
-    private class MessageAttachment {
-        // После окончания write проверяем на == requestsPerClient и завершаем сессию и метод,
-        // иначе регистрируем readSelector и продолжаем работу
-        private AtomicInteger requestCount = new AtomicInteger(0);
-        private final BenchmarkBox benchmarkBox;
-        private final ByteBuffer messageSizeBuffer = ByteBuffer.allocate(4);
-        private ByteBuffer messageContent;
-        private int messageContentSize;
-
-        private MessageAttachment(BenchmarkBox benchmarkBox) {
-            this.benchmarkBox = benchmarkBox;
-        }
-
-        public void startClientSession() {
-            benchmarkBox.startClientSession();
-        }
-
-        public void finishClientSession() {
-            benchmarkBox.finishClientSession();
-        }
-
-        public void startProcessing() {
-            benchmarkBox.startProcessing();
-        }
-
-        public void finishProcessing() {
-            benchmarkBox.finishProcessing();
-        }
-
-        public void startSorting() {
-            benchmarkBox.startSorting();
-        }
-
-        public void finishSorting() {
-            benchmarkBox.finishSorting();
-        }
     }
 }

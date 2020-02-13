@@ -51,7 +51,7 @@ public class Client implements Runnable {
         if (receivedMessage == null) {
             throw new UnexpectedResponseException("Received sortingMessage is null!");
         }
-        List<Integer> list = receivedMessage.getElements2List();
+        List<Integer> list = receivedMessage.getElementsList();
         boolean ordered = Ordering.natural().isOrdered(list);
         if (!ordered) {
             throw new UnexpectedResponseException("Received sortingMessage is not sorted!");
@@ -60,13 +60,12 @@ public class Client implements Runnable {
 
     protected SortingMessage generateMessage() {
         return SortingMessage.newBuilder()
-                .addAllElements2(
+                .addAllElements(
                         new Random().ints()
                                 .boxed()
                                 .limit(configuration.getArrayElements().getValue())
                                 .collect(Collectors.toList())
                 )
-                .setElementsCount1(configuration.getArrayElements().getValue())
                 .build();
     }
 

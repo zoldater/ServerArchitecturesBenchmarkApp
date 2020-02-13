@@ -78,12 +78,11 @@ public class Utils {
         if (message == null) {
             return null;
         }
-        int[] arr = message.getElements2List().stream().mapToInt(Integer::intValue).toArray();
+        int[] arr = message.getElementsList().stream().mapToInt(Integer::intValue).toArray();
         bubbleSort(arr);
         List<Integer> sortedElements = Arrays.stream(arr).boxed().collect(Collectors.toList());
         return SortingMessage.newBuilder()
-                .setElementsCount1(arr.length)
-                .addAllElements2(sortedElements)
+                .addAllElements(sortedElements)
                 .build();
     }
 

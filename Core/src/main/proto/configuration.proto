@@ -5,8 +5,8 @@ option java_outer_classname = "ConfigurationProtos";
 
 message ConfigurationRequest {
     int32 architectureCode = 1;
-    int32 clientsCount = 2;
-    int32 requestsPerClient = 3;
+    int32 clientsCount = 3;
+    int32 requestsPerClient = 4;
 }
 
 message ConfigurationResponse {

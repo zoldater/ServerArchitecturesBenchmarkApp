@@ -4,6 +4,5 @@ option java_package = "ru.spbau.mit.core.proto";
 option java_outer_classname = "SortingProtos";
 
 message SortingMessage {
-    int32 elementsCount = 1;
-    repeated int32 elements = 2;
+    repeated fixed32 elements = 2;
 }

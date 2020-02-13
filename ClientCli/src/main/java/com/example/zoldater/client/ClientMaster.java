@@ -28,7 +28,6 @@ import static ru.spbau.mit.core.proto.ConfigurationProtos.ConfigurationRequest;
 
 public class ClientMaster {
     private final InitialConfiguration initialConfiguration;
-    private final ExecutorService sortingConnectionService = Executors.newCachedThreadPool();
     private final List<IterationBenchmarkResults> resultsList = new ArrayList<>();
 
     private final List<XYChart> charts = new ArrayList<>();
@@ -59,6 +58,7 @@ public class ClientMaster {
                         .setArchitectureCode(config.getArchitectureType().code)
                         .setClientsCount(config.getClientsNumber().getValue())
                         .setRequestsPerClient(config.getRequestsPerClient().getValue())
+                        .setElementsCount(config.getArrayElements().getValue())
                         .build();
                 Utils.writeToStream(configurationRequest, outputStream);
                 final ConfigurationResponse configurationResponse = Utils.readConfigurationResponse(inputStream);
@@ -71,20 +71,16 @@ public class ClientMaster {
                         .collect(Collectors.toList());
                 List<Thread> threads = clients.stream().map(Thread::new).collect(Collectors.toList());
                 threads.forEach(Thread::start);
-                threads.forEach(it -> {
-                    try {
-                        it.join();
-                    } catch (InterruptedException e) {
-                        Logger.error(e);
-                        throw new RuntimeException(e);
-                    }
-                });
 
                 final ResultsProtos.IterationResultsMessage resultsResponse = Utils.readResults(inputStream);
                 Logger.info("results received!");
+
+                threads.forEach(Thread::interrupt);
+
                 if (resultsResponse == null) {
                     throw new RuntimeException("Bad response on results request!");
                 }
+
                 int variableValue = 0;
                 switch (initialConfiguration.getVariableArgumentData().getArgumentTypeEnum()) {
                     case ARRAY_ELEMENTS:
@@ -102,14 +98,14 @@ public class ClientMaster {
                 }
                 resultsList.add(new IterationBenchmarkResults(variableValue,
                         resultsResponse.getAverageClientTime(), resultsResponse.getAverageProcessingTime(), resultsResponse.getAverageSortingTime()));
-
-            saveResultsToCsvAndImage(resultsList, initialConfiguration);
+                Logger.info("results processing!");
+                saveResultsToCsvAndImage(resultsList, initialConfiguration);
+                Logger.info("results processed!");
 
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
             } finally {
-                sortingConnectionService.shutdownNow();
                 Utils.closeResources(socket, null, null);
             }
         });

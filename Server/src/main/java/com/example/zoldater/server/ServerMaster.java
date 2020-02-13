@@ -44,26 +44,7 @@ public class ServerMaster {
                 if (configurationRequest == null) {
                     throw new UnexpectedResponseException("Configuration request from client is null!");
                 }
-                final int architectureCode = configurationRequest.getArchitectureCode();
-                final int clientsCount = configurationRequest.getClientsCount();
-                final int requestsPerClient = configurationRequest.getRequestsPerClient();
-
-                CountDownLatch resultsSendingLatch = new CountDownLatch(clientsCount);
-
-                switch (architectureCode) {
-                    case 1:
-                        server = new BlockingServerThread(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
-                        break;
-                    case 2:
-                        server = new BlockingServerPool(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
-                        break;
-                    case 3:
-                        server = new NonBlockingServer(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
-                        break;
-                    default:
-                        throw new RuntimeException("Bad architecture code received from client: " + architectureCode);
-                }
-
+                server = ServerArchitectureFactory.generate(configurationRequest, semaphoreSending);
                 serverThread = new Thread(server);
                 serverThread.start();
                 semaphoreSending.acquire();
@@ -72,12 +53,14 @@ public class ServerMaster {
                         .build();
                 Utils.writeToStream(response, os);
 
-                resultsSendingLatch.await();
+                server.resultsSendingLatch.await();
 
                 server.shutdown();
                 serverThread.interrupt();
-
                 final List<BenchmarkBox> benchmarkBoxes = server.getBenchmarkBoxes();
+                server = null;
+                serverThread = null;
+
                 final double avgClientTime = benchmarkBoxes.stream()
                         .map(BenchmarkBox::getClientTimes)
                         .flatMap(Collection::stream)
@@ -98,7 +81,7 @@ public class ServerMaster {
                         .orElse(0);
 
                 IterationResultsMessage resultsMessage = IterationResultsMessage.newBuilder()
-                        .setAverageClientTime(avgClientTime / requestsPerClient)
+                        .setAverageClientTime(avgClientTime / configurationRequest.getRequestsPerClient())
                         .setAverageProcessingTime(avgProcessingTime)
                         .setAverageSortingTime(avgSortingTime)
                         .build();

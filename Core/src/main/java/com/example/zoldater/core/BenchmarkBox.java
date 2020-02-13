@@ -10,6 +10,7 @@ public class BenchmarkBox {
     private final List<Pair<Long, Long>> clientTimes;
     private long tmpClientStart;
     private long firstClientFinishTime = -1;
+    private long lastClientStartTime = -1;
     private final List<Pair<Long, Long>> processingTimes;
     private long tmpProcessingStart;
     private final List<Pair<Long, Long>> sortingTimes;
@@ -27,27 +28,28 @@ public class BenchmarkBox {
 
     public List<Long> getClientTimes() {
         return clientTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
                 .map(Pair::getRight)
                 .collect(Collectors.toList());
     }
 
     public List<Long> getProcessingTimes() {
         return processingTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
                 .map(Pair::getRight)
                 .collect(Collectors.toList());
     }
 
     public List<Long> getSortingTimes() {
         return sortingTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime)
+                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
                 .map(Pair::getRight)
                 .collect(Collectors.toList());
     }
 
     public void startClientSession() {
-        tmpClientStart = System.currentTimeMillis();
+        lastClientStartTime = System.currentTimeMillis();
+        tmpClientStart = lastClientStartTime;
     }
 
     public void finishClientSession() {
