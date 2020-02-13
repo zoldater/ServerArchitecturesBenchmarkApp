@@ -104,7 +104,6 @@ public class NonBlockingServer extends AbstractServer {
             channelToSizeBuffersMap.put(socketChannel, byteBuffer);
             channelToBenchmarkBoxMap.put(socketChannel, benchmarkBox);
             channelToIterationsMap.put(socketChannel, 1);
-            countDownLatch.countDown();
             socketChannel.register(readSelector, SelectionKey.OP_READ);
         } catch (IOException e) {
             throw new RuntimeException(e);

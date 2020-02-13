@@ -25,25 +25,29 @@ public class BlockingServerPool extends AbstractBlockingServer {
     @Override
     public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
         Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> {
+            benchmarkBox.startSorting();
             final SortingProtos.SortingMessage message1 = Utils.processSortingMessage(message);
             return message1;
         });
+        while (!messageFuture.isDone()) {
+            Thread.yield();
+        }
         SortingProtos.SortingMessage sortedMessage = messageFuture.get();
+        benchmarkBox.finishSorting();
         return sortedMessage;
     }
 
     @Override
     public void send(SortingProtos.SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
-        Future<?> future = sendingService.submit(() -> {
+        sendingService.submit(() -> {
             try {
                 Utils.writeToStream(message, outputStream);
+                benchmarkBox.finishProcessing();
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
             }
         });
-        future.get();
-        benchmarkBox.finishProcessing();
     }
 
     @Override
@@ -51,5 +55,14 @@ public class BlockingServerPool extends AbstractBlockingServer {
         super.stopWork();
         sortingService.shutdown();
         sendingService.shutdown();
+        try {
+            while (!sortingService.awaitTermination(1, TimeUnit.SECONDS)) {
+            }
+            while (!sendingService.awaitTermination(1, TimeUnit.SECONDS)) {
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }

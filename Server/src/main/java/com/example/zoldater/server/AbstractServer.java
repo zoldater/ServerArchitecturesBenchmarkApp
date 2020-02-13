@@ -18,7 +18,6 @@ public abstract class AbstractServer implements Runnable {
     protected final int clientsCount;
     protected final int requestsPerClient;
     protected final List<BenchmarkBox> benchmarkBoxes = new ArrayList<>();
-    protected final CountDownLatch countDownLatch;
 
 
     protected AbstractServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
@@ -27,7 +26,6 @@ public abstract class AbstractServer implements Runnable {
         this.port = PortConstantEnum.SERVER_PROCESSING_PORT.getPort();
         this.semaphoreSending = semaphoreSending;
         this.clientsCount = clientsCount;
-        countDownLatch = new CountDownLatch(clientsCount);
     }
 
 

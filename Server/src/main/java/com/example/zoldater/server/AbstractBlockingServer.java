@@ -34,6 +34,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             try {
                 socket = serverSocket.accept();
                 BenchmarkBox benchmarkBox = BenchmarkBox.create();
+                benchmarkBox.startClientSession();
                 benchmarkBoxes.add(benchmarkBox);
                 Thread thread = new Thread(() -> processSingleClient(socket, benchmarkBox));
                 clientThreads.add(thread);
@@ -46,20 +47,15 @@ public abstract class AbstractBlockingServer extends AbstractServer {
 
     public void processSingleClient(Socket socket, BenchmarkBox benchmarkBox) {
         try {
-            countDownLatch.countDown();
-            countDownLatch.await();
-            benchmarkBox.startClientSession();
             InputStream inputStream = socket.getInputStream();
             OutputStream outputStream = socket.getOutputStream();
             for (int i = 0; i < requestsPerClient && !isUnlocked; i++) {
-                benchmarkBox.startProcessing();
                 SortingProtos.SortingMessage sortingMessage = Utils.readSortingMessage(inputStream);
+                benchmarkBox.startProcessing();
                 if (sortingMessage == null) {
                     throw new RuntimeException("Sorting message is null");
                 }
-                benchmarkBox.startSorting();
                 SortingProtos.SortingMessage sortedMessage = sort(sortingMessage, benchmarkBox);
-                benchmarkBox.finishSorting();
                 if (sortedMessage == null) {
                     return;
                 }

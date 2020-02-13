@@ -25,7 +25,9 @@ public class BlockingServerThread extends AbstractBlockingServer {
 
     @Override
     public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
+        benchmarkBox.startSorting();
         final SortingProtos.SortingMessage sortedMessage = Utils.processSortingMessage(message);
+        benchmarkBox.finishSorting();
         return sortedMessage;
     }
 
