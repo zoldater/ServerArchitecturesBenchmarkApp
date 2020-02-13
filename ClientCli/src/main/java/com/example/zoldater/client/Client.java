@@ -36,18 +36,17 @@ public class Client implements Runnable {
             for (int j = 0; j < configuration.getRequestsPerClient().getValue(); j++) {
                 process();
             }
-        } catch (IOException e) {
-            Logger.error(e);
-            throw new RuntimeException(e);
-        } finally {
-            Utils.closeResources(socket, is, os);
+        } catch (IOException | InterruptedException e) {
+            Logger.debug("Client thread #" + Thread.currentThread().getId() + " is returned!");
+            return;
         }
     }
 
-    protected void process() throws IOException {
+    protected void process() throws IOException, InterruptedException {
         SortingMessage msg = generateMessage();
         Utils.writeToStream(msg, os);
         SortingMessage receivedMessage = Utils.readSortingMessage(is);
+        Thread.sleep(configuration.getDeltaMs().getValue());
         if (receivedMessage == null) {
             throw new UnexpectedResponseException("Received sortingMessage is null!");
         }
@@ -67,6 +66,10 @@ public class Client implements Runnable {
                                 .collect(Collectors.toList())
                 )
                 .build();
+    }
+
+    protected void shutdown() {
+        Utils.closeResources(socket, is, os);
     }
 
 

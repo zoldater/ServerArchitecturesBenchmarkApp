@@ -58,7 +58,6 @@ public class ClientMaster {
                         .setArchitectureCode(config.getArchitectureType().code)
                         .setClientsCount(config.getClientsNumber().getValue())
                         .setRequestsPerClient(config.getRequestsPerClient().getValue())
-                        .setElementsCount(config.getArrayElements().getValue())
                         .build();
                 Utils.writeToStream(configurationRequest, outputStream);
                 final ConfigurationResponse configurationResponse = Utils.readConfigurationResponse(inputStream);
@@ -81,6 +80,8 @@ public class ClientMaster {
                         Logger.error(e);
                     }
                 });
+                clients.forEach(Client::shutdown);
+                clients.clear();
 
                 if (resultsResponse == null) {
                     throw new RuntimeException("Bad response on results request!");
