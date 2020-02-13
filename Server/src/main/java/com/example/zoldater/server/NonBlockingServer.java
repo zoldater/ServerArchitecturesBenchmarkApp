@@ -25,6 +25,7 @@ public class NonBlockingServer extends AbstractServer {
     private final Map<SocketChannel, ByteBuffer> channelToContentBuffersMap = new ConcurrentHashMap<>();
     private final Map<SocketChannel, BenchmarkBox> channelToBenchmarkBoxMap = new ConcurrentHashMap<>();
     private final Map<SocketChannel, Integer> channelToIterationsMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, Boolean> channelToProcessingSubmitFlagMap = new ConcurrentHashMap<>();
 
     protected NonBlockingServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
         super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
@@ -42,8 +43,29 @@ public class NonBlockingServer extends AbstractServer {
             writeSelector = Selector.open();
             serverSocketChannel.register(readSelector, SelectionKey.OP_ACCEPT);
             semaphoreSending.release();
+            sendingService.submit(() -> {
+                while (true) {
+                    try {
+                        Iterator<SelectionKey> keyIterator;
+                        writeSelector.select();
+                        keyIterator = writeSelector.selectedKeys().iterator();
+                        while (keyIterator.hasNext()) {
+                            SelectionKey key = keyIterator.next();
+                            if (key.isWritable()) {
+                                write(key);
+                            }
+                            keyIterator.remove();
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
 
-            while (serverSocketChannel.isOpen()) {
+            while (true) {
+                if (Thread.interrupted()) {
+                    return;
+                }
                 try {
                     readSelector.select();
                     Iterator<SelectionKey> keyIterator = readSelector.selectedKeys().iterator();
@@ -56,17 +78,6 @@ public class NonBlockingServer extends AbstractServer {
                         }
                         keyIterator.remove();
                     }
-                    int selectedWrite = writeSelector.selectNow();
-                    if (selectedWrite > 0) {
-                        keyIterator = writeSelector.selectedKeys().iterator();
-                        while (keyIterator.hasNext()) {
-                            SelectionKey key = keyIterator.next();
-                            if (key.isWritable()) {
-                                write(key);
-                            }
-                            keyIterator.remove();
-                        }
-                    }
                 } catch (ClosedSelectorException e) {
                     return;
                 } catch (IOException e) {
@@ -74,11 +85,12 @@ public class NonBlockingServer extends AbstractServer {
                 }
             }
         } catch (IOException e) {
-            Logger.error(e);
+            throw new RuntimeException(e);
         } finally {
             shutdown();
         }
     }
+
 
     private void accept(SelectionKey selectionKey) {
         try {
@@ -117,7 +129,6 @@ public class NonBlockingServer extends AbstractServer {
                     benchmarkBox.startProcessing();
                 }
             } catch (IOException e) {
-                Logger.error(e);
                 throw new RuntimeException(e);
             }
         } else {
@@ -131,8 +142,10 @@ public class NonBlockingServer extends AbstractServer {
 
                 channel.read(contentBuffer);
 
-                if (contentBuffer.position() == contentBuffer.capacity()) {
-                    processContent(channel);
+                if (contentBuffer.position() == contentBuffer.capacity()
+                        && !channelToProcessingSubmitFlagMap.containsKey(channel)) {
+                    channelToProcessingSubmitFlagMap.put(channel, true);
+                    sortingService.submit(() -> processContent(channel));
                 }
 
             } catch (IOException e) {
@@ -159,6 +172,8 @@ public class NonBlockingServer extends AbstractServer {
             messageContentByteBuffer.clear();
             messageContentByteBuffer.put(ByteBuffer.wrap(sortedMessageBytes));
             messageContentByteBuffer.flip();
+            channelToProcessingSubmitFlagMap.remove(channel);
+            writeSelector.wakeup();
             channel.register(writeSelector, SelectionKey.OP_WRITE);
         } catch (InvalidProtocolBufferException | ClosedChannelException e) {
             throw new RuntimeException(e);
@@ -170,7 +185,6 @@ public class NonBlockingServer extends AbstractServer {
         ByteBuffer messageContentByteBuffer = channelToContentBuffersMap.get(socketChannel);
         ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(socketChannel);
         BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(socketChannel);
-
         try {
             socketChannel.write(new ByteBuffer[]{sizeByteBuffer, messageContentByteBuffer});
         } catch (IOException e) {
@@ -184,6 +198,7 @@ public class NonBlockingServer extends AbstractServer {
             messageContentByteBuffer.clear();
             key.cancel();
             Integer integer = channelToIterationsMap.get(socketChannel);
+
             channelToIterationsMap.put(socketChannel, integer + 1);
             if (integer == requestsPerClient) {
                 benchmarkBox.finishClientSession();
@@ -213,7 +228,6 @@ public class NonBlockingServer extends AbstractServer {
             }
             serverSocketChannel.close();
         } catch (IOException | InterruptedException e) {
-            Logger.error(e);
             throw new RuntimeException(e);
         }
 

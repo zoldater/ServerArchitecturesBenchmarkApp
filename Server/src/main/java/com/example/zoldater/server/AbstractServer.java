@@ -17,9 +17,6 @@ public abstract class AbstractServer implements Runnable {
     protected final List<Thread> clientThreads = new ArrayList<>();
     protected final int clientsCount;
     protected final int requestsPerClient;
-    protected long averageClientTime;
-    protected final List<Long> averageProcessingTimes = new ArrayList<>();
-    protected final List<Long> averageSortingTimes = new ArrayList<>();
     protected final List<BenchmarkBox> benchmarkBoxes = new ArrayList<>();
     protected final CountDownLatch countDownLatch;
 
@@ -39,9 +36,5 @@ public abstract class AbstractServer implements Runnable {
     }
 
     public abstract void shutdown();
-
-    public ServerSocket getServerSocket() {
-        return serverSocket;
-    }
 
 }

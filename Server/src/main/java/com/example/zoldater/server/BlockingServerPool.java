@@ -26,7 +26,6 @@ public class BlockingServerPool extends AbstractBlockingServer {
     public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
         Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> {
             final SortingProtos.SortingMessage message1 = Utils.processSortingMessage(message);
-            benchmarkBox.finishSorting();
             return message1;
         });
         SortingProtos.SortingMessage sortedMessage = messageFuture.get();
@@ -35,15 +34,16 @@ public class BlockingServerPool extends AbstractBlockingServer {
 
     @Override
     public void send(SortingProtos.SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
-        sendingService.submit(() -> {
+        Future<?> future = sendingService.submit(() -> {
             try {
                 Utils.writeToStream(message, outputStream);
-                benchmarkBox.finishProcessing();
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
             }
         });
+        future.get();
+        benchmarkBox.finishProcessing();
     }
 
     @Override

@@ -59,6 +59,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
                 }
                 benchmarkBox.startSorting();
                 SortingProtos.SortingMessage sortedMessage = sort(sortingMessage, benchmarkBox);
+                benchmarkBox.finishSorting();
                 if (sortedMessage == null) {
                     return;
                 }

@@ -47,12 +47,12 @@ public class ClientMaster {
         List<SingleIterationConfiguration> iterationConfigurations = SingleIterationConfiguration.fromInitialConfiguration(initialConfiguration);
 
         iterationConfigurations.forEach(config -> {
+            Logger.info("New config started!");
             Socket socket = null;
             try {
                 socket = new Socket(initialConfiguration.getServerAddress(), SERVER_CONFIGURATION_PORT.getPort());
                 InputStream inputStream = socket.getInputStream();
                 OutputStream outputStream = socket.getOutputStream();
-                Logger.info("Started new config!");
 
                 final ConfigurationRequest configurationRequest = ConfigurationRequest.newBuilder()
                         .setArchitectureCode(config.getArchitectureType().code)
@@ -73,9 +73,14 @@ public class ClientMaster {
                 threads.forEach(Thread::start);
 
                 final ResultsProtos.IterationResultsMessage resultsResponse = Utils.readResults(inputStream);
-                Logger.info("results received!");
 
-                threads.forEach(Thread::interrupt);
+                threads.forEach(it -> {
+                    try {
+                        it.join();
+                    } catch (InterruptedException e) {
+                        Logger.error(e);
+                    }
+                });
 
                 if (resultsResponse == null) {
                     throw new RuntimeException("Bad response on results request!");
@@ -98,9 +103,6 @@ public class ClientMaster {
                 }
                 resultsList.add(new IterationBenchmarkResults(variableValue,
                         resultsResponse.getAverageClientTime(), resultsResponse.getAverageProcessingTime(), resultsResponse.getAverageSortingTime()));
-                Logger.info("results processing!");
-                saveResultsToCsvAndImage(resultsList, initialConfiguration);
-                Logger.info("results processed!");
 
             } catch (IOException e) {
                 Logger.error(e);
@@ -109,6 +111,11 @@ public class ClientMaster {
                 Utils.closeResources(socket, null, null);
             }
         });
+        try {
+            saveResultsToCsvAndImage(resultsList, initialConfiguration);
+        } catch (IOException e) {
+            Logger.error("Cannot write results to file!");
+        }
 
     }
 

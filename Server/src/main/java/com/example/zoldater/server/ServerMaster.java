@@ -55,8 +55,9 @@ public class ServerMaster {
 
                 server.resultsSendingLatch.await();
 
+
                 server.shutdown();
-                serverThread.interrupt();
+                serverThread.join();
                 final List<BenchmarkBox> benchmarkBoxes = server.getBenchmarkBoxes();
                 server = null;
                 serverThread = null;
@@ -86,7 +87,6 @@ public class ServerMaster {
                         .setAverageSortingTime(avgSortingTime)
                         .build();
                 Utils.writeToStream(resultsMessage, os);
-                Logger.info("resultsMessage sent!");
 
             } catch (IOException | InterruptedException e) {
                 Logger.error(e);
