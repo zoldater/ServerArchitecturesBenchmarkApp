@@ -11,16 +11,22 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class NonBlockingServer extends AbstractServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();
-    private final ExecutorService sortingService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() / 2);
+    private final ExecutorService sortingService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private Selector readSelector;
     private Selector writeSelector;
+    private int connectedClients = 0;
+    private long realStartTime;
     private ServerSocketChannel serverSocketChannel;
+    private final Map<SocketChannel, MessageAttachment> channelToAttachmentMap = new ConcurrentHashMap<>();
 
     protected NonBlockingServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
         super(semaphoreSending, resultsSendingLatch, clientsCount, requestsPerClient);
@@ -37,49 +43,6 @@ public class NonBlockingServer extends AbstractServer {
             readSelector = Selector.open();
             writeSelector = Selector.open();
             serverSocketChannel.register(readSelector, SelectionKey.OP_ACCEPT);
-            sendingService.submit(() -> {
-                while (true) {
-                    Set<SelectionKey> keys;
-                    try {
-                        writeSelector.select();
-                        keys = writeSelector.selectedKeys();
-                    } catch (ClosedSelectorException e) {
-                        return;
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-
-                    Iterator<SelectionKey> it = keys.iterator();
-                    while (it.hasNext()) {
-                        SelectionKey key = it.next();
-                        if (key.isWritable()) {
-                            SocketChannel client = (SocketChannel) (key.channel());
-                            MessageAttachment attachment =
-                                    (MessageAttachment) (key.attachment());
-                            ByteBuffer[] buffers = {
-                                    attachment.messageSizeBuffer,
-                                    attachment.messageContent
-                            };
-                            try {
-                                client.write(buffers);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                            if (attachment.messageSizeBuffer.position() == 4 &&
-                                    attachment.messageContent.position() ==
-                                            attachment.messageContent.capacity()) {
-                                attachment.finishProcessing();
-                                attachment.messageSizeBuffer.clear();
-                                attachment.status = AttachmentStatus.READY_TO_READ;
-                                key.cancel();
-                            }
-                        }
-                        it.remove();
-                    }
-                }
-
-
-            });
             semaphoreSending.release();
 
             while (serverSocketChannel.isOpen()) {
@@ -95,13 +58,21 @@ public class NonBlockingServer extends AbstractServer {
                         }
                         keyIterator.remove();
                     }
+                    writeSelector.selectNow();
+                    keyIterator = writeSelector.selectedKeys().iterator();
+                    while (keyIterator.hasNext()) {
+                        SelectionKey key = keyIterator.next();
+
+                        if (key.isWritable()) {
+                            write(key);
+                        }
+                        keyIterator.remove();
+                    }
                 } catch (ClosedSelectorException e) {
                     return;
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-
-
             }
         } catch (IOException e) {
             Logger.error(e);
@@ -112,18 +83,21 @@ public class NonBlockingServer extends AbstractServer {
     }
 
     private void accept(SelectionKey selectionKey) {
-        SocketChannel socketChannel = null;
         try {
-            socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
+            SocketChannel socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
             if (socketChannel == null) return;
             socketChannel.configureBlocking(false);
             BenchmarkBox benchmarkBox = BenchmarkBox.create();
             benchmarkBoxes.add(benchmarkBox);
-            MessageAttachment attachment = new MessageAttachment(socketChannel, benchmarkBox);
+            MessageAttachment attachment = new MessageAttachment(benchmarkBox);
             attachment.startClientSession();
-            socketChannel.register(readSelector,
-                    SelectionKey.OP_READ,
-                    attachment);
+            channelToAttachmentMap.put(socketChannel, attachment);
+            countDownLatch.countDown();
+            connectedClients++;
+            if (connectedClients == clientsCount) {
+                realStartTime = System.currentTimeMillis();
+            }
+            socketChannel.register(readSelector, SelectionKey.OP_READ);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -132,57 +106,95 @@ public class NonBlockingServer extends AbstractServer {
 
     private void read(SelectionKey selectionKey) {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
-        MessageAttachment attachment = (MessageAttachment) selectionKey.attachment();
 
-        if (AttachmentStatus.READY_TO_READ.equals(attachment.status)) {
+        // Только что пришли из accept, attachment пустой
+        final MessageAttachment messageAttachment = channelToAttachmentMap.get(channel);
+        if (messageAttachment.messageSizeBuffer.remaining() == 4) {
             try {
-                int bytesCount = channel.read(attachment.messageSizeBuffer);
+                int bytesCount = channel.read(messageAttachment.messageSizeBuffer);
                 if (bytesCount < 0) {
                     selectionKey.cancel();
-//                    attachment.finishClientSession();
                 } else {
-                    attachment.startProcessing();
+                    messageAttachment.startProcessing();
                 }
-                if (attachment.messageSizeBuffer.position() == 4) {
-                    attachment.messageSizeBuffer.flip();
-                    attachment.messageContentSize = attachment.messageSizeBuffer.getInt();
-                    attachment.status = AttachmentStatus.READY_TO_PROCESS;
-                    attachment.messageContent = ByteBuffer.allocate(attachment.messageContentSize);
+                if (messageAttachment.messageSizeBuffer.position() == 4) {
+                    messageAttachment.messageSizeBuffer.flip();
+                    messageAttachment.messageContentSize = messageAttachment.messageSizeBuffer.getInt();
+                    messageAttachment.messageContent = ByteBuffer.allocate(messageAttachment.messageContentSize);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else {
             try {
-                channel.read(attachment.messageContent);
+                channel.read(messageAttachment.messageContent);
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);
             }
-            if (attachment.messageContent.position() == attachment.messageContentSize) {
-                attachment.messageContent.flip();
-                sortingService.submit(() -> {
-                    try {
-                        byte[] messageBytesArray = attachment.messageContent.array();
-                        SortingProtos.SortingMessage sortingMessage = SortingProtos.SortingMessage.parseFrom(messageBytesArray);
-                        attachment.startSorting();
-                        SortingProtos.SortingMessage sortedMessage = Utils.processSortingMessage(sortingMessage);
-                        attachment.finishSorting();
-                        byte[] sortedMessageBytes = sortedMessage.toByteArray();
-                        attachment.messageSizeBuffer.clear();
-                        attachment.messageSizeBuffer.putInt(sortedMessageBytes.length);
-                        attachment.messageSizeBuffer.flip();
-                        attachment.messageContent = ByteBuffer.wrap(sortedMessageBytes);
-                        attachment.status = AttachmentStatus.READY_TO_WRITE;
-                        attachment.socketChannel.register(writeSelector, SelectionKey.OP_WRITE, attachment);
-                    } catch (InvalidProtocolBufferException | ClosedChannelException e) {
-                        Logger.error(e);
-                        throw new RuntimeException(e);
-                    }
-                });
+            if (messageAttachment.messageContent.position() == messageAttachment.messageContentSize) {
+                messageAttachment.messageContent.flip();
+                final Semaphore semaphore = new Semaphore(1);
+                try {
+                    semaphore.acquire();
+                    sortingService.submit(() -> {
+                        try {
+                            byte[] messageBytesArray = messageAttachment.messageContent.array();
+                            SortingProtos.SortingMessage sortingMessage = SortingProtos.SortingMessage.parseFrom(messageBytesArray);
+                            messageAttachment.startSorting();
+                            SortingProtos.SortingMessage sortedMessage = Utils.processSortingMessage(sortingMessage);
+                            messageAttachment.finishSorting();
+                            byte[] sortedMessageBytes = sortedMessage.toByteArray();
+                            messageAttachment.messageSizeBuffer.clear();
+                            messageAttachment.messageSizeBuffer.putInt(sortedMessageBytes.length);
+                            messageAttachment.messageSizeBuffer.flip();
+                            messageAttachment.messageContent = ByteBuffer.wrap(sortedMessageBytes);
+                            semaphore.release();
+                        } catch (InvalidProtocolBufferException e) {
+                            Logger.error(e);
+                            throw new RuntimeException(e);
+                        }
+                    });
+                    semaphore.acquire();
+                    channel.register(writeSelector, SelectionKey.OP_WRITE);
+                } catch (InterruptedException | ClosedChannelException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }
+
+    private void write(SelectionKey key) {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+
+        final MessageAttachment messageAttachment = channelToAttachmentMap.get(socketChannel);
+        ByteBuffer[] buffers = {
+                messageAttachment.messageSizeBuffer,
+                messageAttachment.messageContent
+        };
+        if (messageAttachment.messageSizeBuffer.position() == 4
+                && messageAttachment.messageContent.position() == messageAttachment.messageContent.capacity()) {
+            messageAttachment.finishProcessing();
+            messageAttachment.messageSizeBuffer.clear();
+            messageAttachment.messageContent.clear();
+            key.cancel();
+        } else {
+            sendingService.submit(() -> {
+                try {
+                    socketChannel.write(buffers);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            try {
+                socketChannel.register(writeSelector, SelectionKey.OP_WRITE);
+                Logger.info("register writeSelector in write");
+            } catch (ClosedChannelException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
 
     @Override
     public void shutdown() {
@@ -205,16 +217,15 @@ public class NonBlockingServer extends AbstractServer {
 
 
     private class MessageAttachment {
-        private final SocketChannel socketChannel;
+        // После окончания write проверяем на == requestsPerClient и завершаем сессию и метод,
+        // иначе регистрируем readSelector и продолжаем работу
+        private AtomicInteger requestCount = new AtomicInteger(0);
         private final BenchmarkBox benchmarkBox;
         private final ByteBuffer messageSizeBuffer = ByteBuffer.allocate(4);
         private ByteBuffer messageContent;
         private int messageContentSize;
 
-        private AttachmentStatus status = AttachmentStatus.READY_TO_READ;
-
-        private MessageAttachment(SocketChannel socketChannel, BenchmarkBox benchmarkBox) {
-            this.socketChannel = socketChannel;
+        private MessageAttachment(BenchmarkBox benchmarkBox) {
             this.benchmarkBox = benchmarkBox;
         }
 
@@ -222,9 +233,9 @@ public class NonBlockingServer extends AbstractServer {
             benchmarkBox.startClientSession();
         }
 
-//        public void finishClientSession() {
-//            benchmarkBox.finishClientSession();
-//        }
+        public void finishClientSession() {
+            benchmarkBox.finishClientSession();
+        }
 
         public void startProcessing() {
             benchmarkBox.startProcessing();
@@ -240,21 +251,6 @@ public class NonBlockingServer extends AbstractServer {
 
         public void finishSorting() {
             benchmarkBox.finishSorting();
-        }
-    }
-
-    private enum AttachmentStatus {
-        READY_TO_READ(1),
-        READY_TO_PROCESS(2),
-        READY_TO_WRITE(3);
-        private final int code;
-
-        AttachmentStatus(int code) {
-            this.code = code;
-        }
-
-        public int getCode() {
-            return code;
         }
     }
 }
