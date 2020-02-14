@@ -1,17 +1,12 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBox;
 import com.example.zoldater.core.Utils;
-import jdk.jshell.execution.Util;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
 
 import java.io.*;
-import java.net.Socket;
-import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 
 public class BlockingServerPool extends AbstractBlockingServer {
     private final ExecutorService sendingService = Executors.newSingleThreadExecutor();

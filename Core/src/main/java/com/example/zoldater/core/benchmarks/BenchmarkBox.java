@@ -1,4 +1,4 @@
-package com.example.zoldater.core;
+package com.example.zoldater.core.benchmarks;
 
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -7,14 +7,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BenchmarkBox {
-    private final List<Pair<Long, Long>> clientTimes;
-    private long tmpClientStart;
-    private long firstClientFinishTime = -1;
-    private long lastClientStartTime = -1;
-    private final List<Pair<Long, Long>> processingTimes;
-    private long tmpProcessingStart;
-    private final List<Pair<Long, Long>> sortingTimes;
-    private long tmpSortingStart;
+    protected final List<Pair<Long, Long>> clientTimes;
+    protected long tmpClientStart;
+    protected long firstClientFinishTime = -1;
+
+    protected long lastClientStartTime = -1;
+    protected final List<Pair<Long, Long>> processingTimes;
+    protected long tmpProcessingStart;
+    protected final List<Pair<Long, Long>> sortingTimes;
+    protected long tmpSortingStart;
 
     public static BenchmarkBox create() {
         return new BenchmarkBox(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
@@ -24,27 +25,6 @@ public class BenchmarkBox {
         this.clientTimes = clientTimes;
         this.processingTimes = processingTimes;
         this.sortingTimes = sortingTimes;
-    }
-
-    public List<Long> getClientTimes() {
-        return clientTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
-                .map(Pair::getRight)
-                .collect(Collectors.toList());
-    }
-
-    public List<Long> getProcessingTimes() {
-        return processingTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
-                .map(Pair::getRight)
-                .collect(Collectors.toList());
-    }
-
-    public List<Long> getSortingTimes() {
-        return sortingTimes.stream()
-                .filter(it -> it.getLeft() <= firstClientFinishTime && it.getLeft() >= lastClientStartTime)
-                .map(Pair::getRight)
-                .collect(Collectors.toList());
     }
 
     public void startClientSession() {
@@ -75,10 +55,5 @@ public class BenchmarkBox {
     public void finishSorting() {
         long currTime = System.currentTimeMillis();
         sortingTimes.add(Pair.of(currTime, currTime - tmpSortingStart));
-    }
-
-
-    public long getFirstClientFinishTime() {
-        return firstClientFinishTime;
     }
 }

@@ -1,6 +1,6 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBox;
 import com.example.zoldater.core.Utils;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
@@ -24,7 +24,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
     @Override
     public void run() {
         try {
-            serverSocket = new ServerSocket(port);
+            serverSocket = new ServerSocket(port, Short.MAX_VALUE);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -35,7 +35,7 @@ public abstract class AbstractBlockingServer extends AbstractServer {
                 socket = serverSocket.accept();
                 BenchmarkBox benchmarkBox = BenchmarkBox.create();
                 benchmarkBox.startClientSession();
-                benchmarkBoxes.add(benchmarkBox);
+                benchmarkBoxContainer.add(benchmarkBox);
                 Thread thread = new Thread(() -> processSingleClient(socket, benchmarkBox));
                 clientThreads.add(thread);
                 thread.start();

@@ -1,6 +1,7 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBoxContainer;
 import com.example.zoldater.core.enums.PortConstantEnum;
 
 import java.net.ServerSocket;
@@ -17,7 +18,7 @@ public abstract class AbstractServer implements Runnable {
     protected final List<Thread> clientThreads = new ArrayList<>();
     protected final int clientsCount;
     protected final int requestsPerClient;
-    protected final List<BenchmarkBox> benchmarkBoxes = new ArrayList<>();
+    protected final BenchmarkBoxContainer benchmarkBoxContainer = new BenchmarkBoxContainer();
 
 
     protected AbstractServer(Semaphore semaphoreSending, CountDownLatch resultsSendingLatch, int clientsCount, int requestsPerClient) {
@@ -29,8 +30,8 @@ public abstract class AbstractServer implements Runnable {
     }
 
 
-    public List<BenchmarkBox> getBenchmarkBoxes() {
-        return benchmarkBoxes;
+    public BenchmarkBoxContainer getBenchmarkBoxContainer() {
+        return benchmarkBoxContainer;
     }
 
     public abstract void shutdown();

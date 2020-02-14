@@ -1,10 +1,9 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBox;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.google.protobuf.InvalidProtocolBufferException;
-import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
 import java.io.IOException;
@@ -37,7 +36,7 @@ public class NonBlockingServer extends AbstractServer {
         try {
             serverSocketChannel = ServerSocketChannel.open();
 
-            serverSocketChannel.socket().bind(new InetSocketAddress(PortConstantEnum.SERVER_PROCESSING_PORT.getPort()));
+            serverSocketChannel.socket().bind(new InetSocketAddress(PortConstantEnum.SERVER_PROCESSING_PORT.getPort()), Short.MAX_VALUE);
             serverSocketChannel.configureBlocking(false);
             readSelector = Selector.open();
             writeSelector = Selector.open();
@@ -98,7 +97,7 @@ public class NonBlockingServer extends AbstractServer {
             if (socketChannel == null) return;
             socketChannel.configureBlocking(false);
             BenchmarkBox benchmarkBox = BenchmarkBox.create();
-            benchmarkBoxes.add(benchmarkBox);
+            benchmarkBoxContainer.add(benchmarkBox);
             benchmarkBox.startClientSession();
             ByteBuffer byteBuffer = ByteBuffer.allocate(Integer.BYTES);
             channelToSizeBuffersMap.put(socketChannel, byteBuffer);

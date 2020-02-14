@@ -1,7 +1,8 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.BenchmarkBox;
 import com.example.zoldater.core.Utils;
+import com.example.zoldater.core.benchmarks.BenchmarkBoxContainer;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.example.zoldater.core.exception.UnexpectedResponseException;
 import org.tinylog.Logger;
@@ -16,9 +17,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 
 public class ServerMaster {
@@ -58,28 +56,13 @@ public class ServerMaster {
 
                 server.shutdown();
                 serverThread.join();
-                final List<BenchmarkBox> benchmarkBoxes = server.getBenchmarkBoxes();
+                final BenchmarkBoxContainer benchmarkBoxes = server.getBenchmarkBoxContainer();
                 server = null;
                 serverThread = null;
 
-                final double avgClientTime = benchmarkBoxes.stream()
-                        .map(BenchmarkBox::getClientTimes)
-                        .flatMap(Collection::stream)
-                        .mapToLong(it -> it)
-                        .average()
-                        .orElse(0);
-                final double avgProcessingTime = benchmarkBoxes.stream()
-                        .map(BenchmarkBox::getProcessingTimes)
-                        .flatMap(Collection::stream)
-                        .mapToLong(it -> it)
-                        .average()
-                        .orElse(0);
-                final double avgSortingTime = benchmarkBoxes.stream()
-                        .map(BenchmarkBox::getSortingTimes)
-                        .flatMap(Collection::stream)
-                        .mapToLong(it -> it)
-                        .average()
-                        .orElse(0);
+                final double avgClientTime = benchmarkBoxes.getAverageClientTime();
+                final double avgProcessingTime = benchmarkBoxes.getAverageProcessingTime();
+                final double avgSortingTime = benchmarkBoxes.getAverageSortingTime();
 
                 IterationResultsMessage resultsMessage = IterationResultsMessage.newBuilder()
                         .setAverageClientTime(avgClientTime / configurationRequest.getRequestsPerClient())
