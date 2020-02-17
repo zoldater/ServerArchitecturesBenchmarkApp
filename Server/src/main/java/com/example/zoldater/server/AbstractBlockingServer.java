@@ -1,6 +1,6 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.benchmarks.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.ServerBenchmarkBox;
 import com.example.zoldater.core.Utils;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
@@ -33,10 +33,9 @@ public abstract class AbstractBlockingServer extends AbstractServer {
             Socket socket;
             try {
                 socket = serverSocket.accept();
-                BenchmarkBox benchmarkBox = BenchmarkBox.create();
-                benchmarkBox.startClientSession();
-                benchmarkBoxContainer.add(benchmarkBox);
-                Thread thread = new Thread(() -> processSingleClient(socket, benchmarkBox));
+                ServerBenchmarkBox serverBenchmarkBox = new ServerBenchmarkBox();
+                serverBenchmarkBoxes.add(serverBenchmarkBox);
+                Thread thread = new Thread(() -> processSingleClient(socket, serverBenchmarkBox));
                 clientThreads.add(thread);
                 thread.start();
             } catch (IOException e) {
@@ -45,24 +44,23 @@ public abstract class AbstractBlockingServer extends AbstractServer {
         }
     }
 
-    public void processSingleClient(Socket socket, BenchmarkBox benchmarkBox) {
+    public void processSingleClient(Socket socket, ServerBenchmarkBox serverBenchmarkBox) {
         try {
             InputStream inputStream = socket.getInputStream();
             OutputStream outputStream = socket.getOutputStream();
             for (int i = 0; i < requestsPerClient && !isUnlocked; i++) {
                 SortingProtos.SortingMessage sortingMessage = Utils.readSortingMessage(inputStream);
-                benchmarkBox.startProcessing();
+                serverBenchmarkBox.startProcessing();
                 if (sortingMessage == null) {
                     throw new RuntimeException("Sorting message is null");
                 }
-                SortingProtos.SortingMessage sortedMessage = sort(sortingMessage, benchmarkBox);
+                SortingProtos.SortingMessage sortedMessage = sort(sortingMessage, serverBenchmarkBox);
                 if (sortedMessage == null) {
                     return;
                 }
-                send(sortedMessage, outputStream, benchmarkBox);
+                send(sortedMessage, outputStream, serverBenchmarkBox);
             }
             resultsSendingLatch.countDown();
-            benchmarkBox.finishClientSession();
         } catch (IOException | ExecutionException e) {
             Logger.error(e);
             throw new RuntimeException(e);
@@ -72,9 +70,9 @@ public abstract class AbstractBlockingServer extends AbstractServer {
         }
     }
 
-    public abstract SortingMessage sort(SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException;
+    public abstract SortingMessage sort(SortingMessage message, ServerBenchmarkBox serverBenchmarkBox) throws ExecutionException, InterruptedException;
 
-    public abstract void send(SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws IOException, ExecutionException, InterruptedException;
+    public abstract void send(SortingMessage message, OutputStream outputStream, ServerBenchmarkBox serverBenchmarkBox) throws IOException, ExecutionException, InterruptedException;
 
     @Override
     public void shutdown() {

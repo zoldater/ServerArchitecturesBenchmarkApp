@@ -1,6 +1,6 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.benchmarks.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.ServerBenchmarkBox;
 import com.example.zoldater.core.Utils;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos;
@@ -18,9 +18,9 @@ public class BlockingServerPool extends AbstractBlockingServer {
 
 
     @Override
-    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
+    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, ServerBenchmarkBox serverBenchmarkBox) throws ExecutionException, InterruptedException {
         Future<SortingProtos.SortingMessage> messageFuture = sortingService.submit(() -> {
-            benchmarkBox.startSorting();
+            serverBenchmarkBox.startSorting();
             final SortingProtos.SortingMessage message1 = Utils.processSortingMessage(message);
             return message1;
         });
@@ -28,16 +28,16 @@ public class BlockingServerPool extends AbstractBlockingServer {
             Thread.yield();
         }
         SortingProtos.SortingMessage sortedMessage = messageFuture.get();
-        benchmarkBox.finishSorting();
+        serverBenchmarkBox.finishSorting();
         return sortedMessage;
     }
 
     @Override
-    public void send(SortingProtos.SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
+    public void send(SortingProtos.SortingMessage message, OutputStream outputStream, ServerBenchmarkBox serverBenchmarkBox) throws ExecutionException, InterruptedException {
         sendingService.submit(() -> {
             try {
                 Utils.writeToStream(message, outputStream);
-                benchmarkBox.finishProcessing();
+                serverBenchmarkBox.finishProcessing();
             } catch (IOException e) {
                 Logger.error(e);
                 throw new RuntimeException(e);

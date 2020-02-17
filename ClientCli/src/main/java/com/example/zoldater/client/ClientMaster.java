@@ -1,11 +1,13 @@
 package com.example.zoldater.client;
 
 import com.example.zoldater.core.Utils;
+import com.example.zoldater.core.benchmarks.ClientBenchmarkBox;
 import com.example.zoldater.core.configuration.InitialConfiguration;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.configuration.data.VariableArgumentData;
 import com.example.zoldater.core.exception.InvalidConfigurationException;
 import com.opencsv.CSVWriter;
+import org.apache.commons.lang3.tuple.Pair;
 import org.knowm.xchart.BitmapEncoder;
 import org.knowm.xchart.QuickChart;
 import org.knowm.xchart.XYChart;
@@ -17,9 +19,9 @@ import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -65,8 +67,9 @@ public class ClientMaster {
                     throw new RuntimeException("Bad response on configuration request!");
                 }
                 int clientsNumber = config.getClientsNumber().getValue();
+                CountDownLatch startLatch = new CountDownLatch(clientsNumber);
                 List<Client> clients = IntStream.range(0, clientsNumber)
-                        .mapToObj(it -> new Client(config))
+                        .mapToObj(it -> new Client(startLatch, config))
                         .collect(Collectors.toList());
                 List<Thread> threads = clients.stream().map(Thread::new).collect(Collectors.toList());
                 threads.forEach(Thread::start);
@@ -81,7 +84,6 @@ public class ClientMaster {
                     }
                 });
                 clients.forEach(Client::shutdown);
-                clients.clear();
 
                 if (resultsResponse == null) {
                     throw new RuntimeException("Bad response on results request!");
@@ -102,8 +104,25 @@ public class ClientMaster {
                         throw new InvalidConfigurationException("Unexpected variable type - " +
                                 initialConfiguration.getVariableArgumentData().getArgumentTypeEnum());
                 }
-                resultsList.add(new IterationBenchmarkResults(variableValue,
-                        resultsResponse.getAverageClientTime(), resultsResponse.getAverageProcessingTime(), resultsResponse.getAverageSortingTime()));
+
+                List<Pair<Long, Long>> clientIterationTimes = clients.stream()
+                        .map(it -> it.clientBenchmarkBoxes)
+                        .flatMap(Collection::stream)
+                        .map(ClientBenchmarkBox::getClientIterationTimes)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList());
+
+                List<Pair<Long, Long>> processingTimes = resultsResponse.getProcessingTimePairsList().stream()
+                        .map(it -> Pair.of(it.getResultTimestamp(), it.getResultsData()))
+                        .collect(Collectors.toList());
+
+                List<Pair<Long, Long>> sortingTimes = resultsResponse.getSortingTimePairsList().stream()
+                        .map(it -> Pair.of(it.getResultTimestamp(), it.getResultsData()))
+                        .collect(Collectors.toList());
+
+                long firstFinishTime = clients.stream().map(Client::getFinishTime).mapToLong(it -> it).min().orElse(0);
+
+                resultsList.add(obtainIterationResultsFrom(variableValue, firstFinishTime, clientIterationTimes, processingTimes, sortingTimes));
 
             } catch (IOException e) {
                 Logger.error(e);
@@ -201,6 +220,33 @@ public class ClientMaster {
             this.averageProcessingTime = averageProcessingTime;
             this.averageSortingTime = averageSortingTime;
         }
+    }
+
+    private static IterationBenchmarkResults obtainIterationResultsFrom(int variableValue,
+                                                                        long firstFinishTime,
+                                                                        List<Pair<Long, Long>> clientWorkingTimes,
+                                                                        List<Pair<Long, Long>> processingTimes,
+                                                                        List<Pair<Long, Long>> sortingTimes) {
+        double avgM1 = clientWorkingTimes.stream()
+                .map(Pair::getRight)
+                .mapToLong(it -> it)
+                .average()
+                .orElse(0);
+
+        double avgM2 = processingTimes.stream()
+                .filter(it -> it.getLeft() < firstFinishTime)
+                .map(Pair::getRight)
+                .mapToLong(it -> it)
+                .average()
+                .orElse(0);
+        double avgM3 = sortingTimes.stream()
+                .filter(it -> it.getLeft() < firstFinishTime)
+                .map(Pair::getRight)
+                .mapToLong(it -> it)
+                .average()
+                .orElse(0);
+
+        return new IterationBenchmarkResults(variableValue, avgM1, avgM2, avgM3);
     }
 }
 

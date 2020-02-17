@@ -1,6 +1,6 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.benchmarks.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.ServerBenchmarkBox;
 import com.example.zoldater.core.Utils;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -22,7 +22,7 @@ public class NonBlockingServer extends AbstractServer {
     private ServerSocketChannel serverSocketChannel;
     private final Map<SocketChannel, ByteBuffer> channelToSizeBuffersMap = new ConcurrentHashMap<>();
     private final Map<SocketChannel, ByteBuffer> channelToContentBuffersMap = new ConcurrentHashMap<>();
-    private final Map<SocketChannel, BenchmarkBox> channelToBenchmarkBoxMap = new ConcurrentHashMap<>();
+    private final Map<SocketChannel, ServerBenchmarkBox> channelToBenchmarkBoxMap = new ConcurrentHashMap<>();
     private final Map<SocketChannel, Integer> channelToIterationsMap = new ConcurrentHashMap<>();
     private final Map<SocketChannel, Boolean> channelToProcessingSubmitFlagMap = new ConcurrentHashMap<>();
 
@@ -46,7 +46,7 @@ public class NonBlockingServer extends AbstractServer {
                 while (true) {
                     try {
                         Iterator<SelectionKey> keyIterator;
-                        writeSelector.select();
+                        writeSelector.select(50);
                         keyIterator = writeSelector.selectedKeys().iterator();
                         while (keyIterator.hasNext()) {
                             SelectionKey key = keyIterator.next();
@@ -96,12 +96,11 @@ public class NonBlockingServer extends AbstractServer {
             SocketChannel socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
             if (socketChannel == null) return;
             socketChannel.configureBlocking(false);
-            BenchmarkBox benchmarkBox = BenchmarkBox.create();
-            benchmarkBoxContainer.add(benchmarkBox);
-            benchmarkBox.startClientSession();
+            ServerBenchmarkBox serverBenchmarkBox = new ServerBenchmarkBox();
+            serverBenchmarkBoxes.add(serverBenchmarkBox);
             ByteBuffer byteBuffer = ByteBuffer.allocate(Integer.BYTES);
             channelToSizeBuffersMap.put(socketChannel, byteBuffer);
-            channelToBenchmarkBoxMap.put(socketChannel, benchmarkBox);
+            channelToBenchmarkBoxMap.put(socketChannel, serverBenchmarkBox);
             channelToIterationsMap.put(socketChannel, 1);
             socketChannel.register(readSelector, SelectionKey.OP_READ);
         } catch (IOException e) {
@@ -113,7 +112,7 @@ public class NonBlockingServer extends AbstractServer {
     private void read(SelectionKey selectionKey) {
         SocketChannel channel = (SocketChannel) selectionKey.channel();
 
-        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(channel);
+        ServerBenchmarkBox serverBenchmarkBox = channelToBenchmarkBoxMap.get(channel);
         ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(channel);
 
         // Только начали читать sizeBuffer
@@ -122,9 +121,8 @@ public class NonBlockingServer extends AbstractServer {
                 long readBytes = channel.read(sizeByteBuffer);
                 if (readBytes == -1) {
                     selectionKey.cancel();
-                    benchmarkBox.finishClientSession();
                 } else {
-                    benchmarkBox.startProcessing();
+                    serverBenchmarkBox.startProcessing();
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -155,14 +153,14 @@ public class NonBlockingServer extends AbstractServer {
     private void processContent(SocketChannel channel) {
         ByteBuffer messageContentByteBuffer = channelToContentBuffersMap.get(channel);
         ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(channel);
-        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(channel);
+        ServerBenchmarkBox serverBenchmarkBox = channelToBenchmarkBoxMap.get(channel);
         messageContentByteBuffer.flip();
         byte[] messageBytesArray = messageContentByteBuffer.array();
         try {
             SortingMessage sortingMessage = SortingMessage.parseFrom(messageBytesArray);
-            benchmarkBox.startSorting();
+            serverBenchmarkBox.startSorting();
             SortingMessage sortedMessage = Utils.processSortingMessage(sortingMessage);
-            benchmarkBox.finishSorting();
+            serverBenchmarkBox.finishSorting();
             byte[] sortedMessageBytes = sortedMessage.toByteArray();
             sizeByteBuffer.clear();
             sizeByteBuffer.putInt(sortedMessageBytes.length);
@@ -171,8 +169,8 @@ public class NonBlockingServer extends AbstractServer {
             messageContentByteBuffer.put(ByteBuffer.wrap(sortedMessageBytes));
             messageContentByteBuffer.flip();
             channelToProcessingSubmitFlagMap.remove(channel);
-            writeSelector.wakeup();
             channel.register(writeSelector, SelectionKey.OP_WRITE);
+            writeSelector.wakeup();
         } catch (InvalidProtocolBufferException | ClosedChannelException e) {
             throw new RuntimeException(e);
         }
@@ -182,7 +180,7 @@ public class NonBlockingServer extends AbstractServer {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         ByteBuffer messageContentByteBuffer = channelToContentBuffersMap.get(socketChannel);
         ByteBuffer sizeByteBuffer = channelToSizeBuffersMap.get(socketChannel);
-        BenchmarkBox benchmarkBox = channelToBenchmarkBoxMap.get(socketChannel);
+        ServerBenchmarkBox serverBenchmarkBox = channelToBenchmarkBoxMap.get(socketChannel);
         try {
             socketChannel.write(new ByteBuffer[]{sizeByteBuffer, messageContentByteBuffer});
         } catch (IOException e) {
@@ -191,7 +189,7 @@ public class NonBlockingServer extends AbstractServer {
         if (sizeByteBuffer.position() == sizeByteBuffer.capacity() &&
                 messageContentByteBuffer.position() ==
                         messageContentByteBuffer.capacity()) {
-            benchmarkBox.finishProcessing();
+            serverBenchmarkBox.finishProcessing();
             sizeByteBuffer.clear();
             messageContentByteBuffer.clear();
             key.cancel();
@@ -199,7 +197,6 @@ public class NonBlockingServer extends AbstractServer {
 
             channelToIterationsMap.put(socketChannel, integer + 1);
             if (integer == requestsPerClient) {
-                benchmarkBox.finishClientSession();
                 resultsSendingLatch.countDown();
             }
         }

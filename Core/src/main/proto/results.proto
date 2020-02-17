@@ -3,8 +3,12 @@ syntax = "proto3";
 option java_package = "ru.spbau.mit.core.proto";
 option java_outer_classname = "ResultsProtos";
 
+message ResultsPair {
+    fixed64 resultTimestamp = 1;
+    fixed64 resultsData = 2;
+}
+
 message IterationResultsMessage {
-    double averageClientTime = 1;
-    double averageProcessingTime = 2;
-    double averageSortingTime = 3;
+    repeated ResultsPair processingTimePairs = 1;
+    repeated ResultsPair sortingTimePairs = 2;
 }

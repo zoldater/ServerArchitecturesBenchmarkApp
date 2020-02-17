@@ -1,14 +1,14 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.benchmarks.BenchmarkBox;
 import com.example.zoldater.core.Utils;
-import com.example.zoldater.core.benchmarks.BenchmarkBoxContainer;
+import com.example.zoldater.core.benchmarks.ServerBenchmarkBox;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.example.zoldater.core.exception.UnexpectedResponseException;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.ConfigurationProtos;
 import ru.spbau.mit.core.proto.ConfigurationProtos.ConfigurationResponse;
 import ru.spbau.mit.core.proto.ResultsProtos.IterationResultsMessage;
+import ru.spbau.mit.core.proto.ResultsProtos.ResultsPair;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +18,7 @@ import java.net.Socket;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 public class ServerMaster {
     private AbstractServer server;
@@ -56,18 +57,30 @@ public class ServerMaster {
 
                 server.shutdown();
                 serverThread.join();
-                final BenchmarkBoxContainer benchmarkBoxes = server.getBenchmarkBoxContainer();
+                List<ServerBenchmarkBox> serverBenchmarkBoxes = server.getServerBenchmarkBoxes();
                 server = null;
                 serverThread = null;
 
-                final double avgClientTime = benchmarkBoxes.getAverageClientTime();
-                final double avgProcessingTime = benchmarkBoxes.getAverageProcessingTime();
-                final double avgSortingTime = benchmarkBoxes.getAverageSortingTime();
+                List<ResultsPair> processingTimeslist = serverBenchmarkBoxes.stream()
+                        .map(it -> it.getProcessingTimes())
+                        .flatMap(Collection::stream)
+                        .map(it -> ResultsPair.newBuilder()
+                                .setResultTimestamp(it.getLeft())
+                                .setResultsData(it.getRight())
+                                .build())
+                        .collect(Collectors.toList());
 
+                List<ResultsPair> sortingTimeslist = serverBenchmarkBoxes.stream()
+                        .map(it -> it.getSortingTimes())
+                        .flatMap(Collection::stream)
+                        .map(it -> ResultsPair.newBuilder()
+                                .setResultTimestamp(it.getLeft())
+                                .setResultsData(it.getRight())
+                                .build())
+                        .collect(Collectors.toList());
                 IterationResultsMessage resultsMessage = IterationResultsMessage.newBuilder()
-                        .setAverageClientTime(avgClientTime / configurationRequest.getRequestsPerClient())
-                        .setAverageProcessingTime(avgProcessingTime)
-                        .setAverageSortingTime(avgSortingTime)
+                        .addAllProcessingTimePairs(processingTimeslist)
+                        .addAllSortingTimePairs(sortingTimeslist)
                         .build();
                 Utils.writeToStream(resultsMessage, os);
 

@@ -1,6 +1,6 @@
 package com.example.zoldater.server;
 
-import com.example.zoldater.core.benchmarks.BenchmarkBox;
+import com.example.zoldater.core.benchmarks.ServerBenchmarkBox;
 import com.example.zoldater.core.Utils;
 import ru.spbau.mit.core.proto.SortingProtos;
 
@@ -18,16 +18,16 @@ public class BlockingServerThread extends AbstractBlockingServer {
     }
 
     @Override
-    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, BenchmarkBox benchmarkBox) throws ExecutionException, InterruptedException {
-        benchmarkBox.startSorting();
+    public SortingProtos.SortingMessage sort(SortingProtos.SortingMessage message, ServerBenchmarkBox serverBenchmarkBox) throws ExecutionException, InterruptedException {
+        serverBenchmarkBox.startSorting();
         final SortingProtos.SortingMessage sortedMessage = Utils.processSortingMessage(message);
-        benchmarkBox.finishSorting();
+        serverBenchmarkBox.finishSorting();
         return sortedMessage;
     }
 
     @Override
-    public void send(SortingProtos.SortingMessage message, OutputStream outputStream, BenchmarkBox benchmarkBox) throws IOException {
+    public void send(SortingProtos.SortingMessage message, OutputStream outputStream, ServerBenchmarkBox serverBenchmarkBox) throws IOException {
         Utils.writeToStream(message, outputStream);
-        benchmarkBox.finishProcessing();
+        serverBenchmarkBox.finishProcessing();
     }
 }

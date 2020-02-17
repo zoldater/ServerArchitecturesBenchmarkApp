@@ -1,6 +1,7 @@
 package com.example.zoldater.client;
 
 import com.example.zoldater.core.Utils;
+import com.example.zoldater.core.benchmarks.ClientBenchmarkBox;
 import com.example.zoldater.core.configuration.SingleIterationConfiguration;
 import com.example.zoldater.core.enums.PortConstantEnum;
 import com.example.zoldater.core.exception.UnexpectedResponseException;
@@ -8,22 +9,28 @@ import com.google.common.collect.Ordering;
 import org.tinylog.Logger;
 import ru.spbau.mit.core.proto.SortingProtos.SortingMessage;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class Client implements Runnable {
     private Socket socket;
     private InputStream is;
     private OutputStream os;
+    List<ClientBenchmarkBox> clientBenchmarkBoxes = new ArrayList<>();
+    private long finishTime;
+    private final CountDownLatch startLatch;
 
     protected final SingleIterationConfiguration configuration;
 
-    public Client(SingleIterationConfiguration configuration) {
+    public Client(CountDownLatch startLatch, SingleIterationConfiguration configuration) {
+        this.startLatch = startLatch;
         this.configuration = configuration;
     }
 
@@ -33,20 +40,27 @@ public class Client implements Runnable {
             socket = new Socket(configuration.getServerAddress(), PortConstantEnum.SERVER_PROCESSING_PORT.getPort());
             is = socket.getInputStream();
             os = socket.getOutputStream();
+            startLatch.countDown();
+            startLatch.await();
             for (int j = 0; j < configuration.getRequestsPerClient().getValue(); j++) {
+                ClientBenchmarkBox clientBenchmarkBox = new ClientBenchmarkBox();
+                clientBenchmarkBoxes.add(clientBenchmarkBox);
+                clientBenchmarkBox.startClientIteration();
                 process();
+                clientBenchmarkBox.finishClientIteration();
+                Thread.sleep(configuration.getDeltaMs().getValue());
             }
+            finishTime = System.currentTimeMillis();
         } catch (IOException | InterruptedException e) {
             Logger.debug("Client thread #" + Thread.currentThread().getId() + " is returned!");
             return;
         }
     }
 
-    protected void process() throws IOException, InterruptedException {
+    protected void process() throws IOException {
         SortingMessage msg = generateMessage();
         Utils.writeToStream(msg, os);
         SortingMessage receivedMessage = Utils.readSortingMessage(is);
-        Thread.sleep(configuration.getDeltaMs().getValue());
         if (receivedMessage == null) {
             throw new UnexpectedResponseException("Received sortingMessage is null!");
         }
@@ -73,4 +87,7 @@ public class Client implements Runnable {
     }
 
 
+    public long getFinishTime() {
+        return finishTime;
+    }
 }
