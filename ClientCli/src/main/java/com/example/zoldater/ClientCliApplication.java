@@ -7,6 +7,7 @@ import com.example.zoldater.core.configuration.data.ValueArgumentDataBuilder;
 import com.example.zoldater.core.configuration.data.VariableArgumentDataBuilder;
 import org.knowm.xchart.XYChart;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.example.zoldater.core.enums.ArchitectureTypeEnum.*;
@@ -27,25 +28,24 @@ public class ClientCliApplication {
 
     private static InitialConfiguration generateInitialConfig() {
         return new InitialConfigurationBuilder()
-//                .setArchitectureType(ONLY_THREADS_ARCH)
+                .setArchitectureType(ONLY_THREADS_ARCH)
 //                .setArchitectureType(WITH_EXECUTORS_ARCH)
-                .setArchitectureType(NON_BLOCKING_ARCH)
-                .setServerAddress("localhost")
-                .setVariableArgumentData(new VariableArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS)
-                        .setFrom(1000)
-                        .setTo(5000)
+//                .setArchitectureType(NON_BLOCKING_ARCH)
+                .setServerAddress("192.168.1.64")
+                .setVariableArgumentData(new VariableArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS)
+                        .setFrom(100)
+                        .setTo(3100)
                         .setStep(100)
                         .createVariableArgumentData())
-                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(DELTA_MS)
-                        .setValue(200)
-                        .createValueArgumentData())
-                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER)
+                .setValueArgumentData1(new ValueArgumentDataBuilder().setArgumentTypeEnum(CLIENTS_NUMBER)
                         .setValue(30)
+                        .createValueArgumentData())
+                .setValueArgumentData2(new ValueArgumentDataBuilder().setArgumentTypeEnum(ARRAY_ELEMENTS)
+                        .setValue(20000)
                         .createValueArgumentData())
                 .setRequestsPerClient(new ValueArgumentDataBuilder().setArgumentTypeEnum(REQUESTS_PER_CLIENT)
-                        .setValue(30)
+                        .setValue(5)
                         .createValueArgumentData())
                 .createInitialConfiguration();
     }
-
 }

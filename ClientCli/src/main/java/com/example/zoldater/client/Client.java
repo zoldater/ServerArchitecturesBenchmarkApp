@@ -52,8 +52,7 @@ public class Client implements Runnable {
             }
             finishTime = System.currentTimeMillis();
         } catch (IOException | InterruptedException e) {
-            Logger.debug("Client thread #" + Thread.currentThread().getId() + " is returned!");
-            return;
+            throw new RuntimeException(e);
         }
     }
 
